@@ -268,3 +268,39 @@
     }
   }
 }
+
+/* =============================================
+   RTL (Right-to-Left) Support
+   ============================================= */
+[dir="rtl"] .flip-rtl {
+  transform: scaleX(-1);
+}
+
+[dir="rtl"] .ml-auto {
+  margin-left: 0 !important;
+  margin-right: auto !important;
+}
+
+[dir="rtl"] .space-x-2 > :not([hidden]) ~ :not([hidden]),
+[dir="rtl"] .space-x-3 > :not([hidden]) ~ :not([hidden]),
+[dir="rtl"] .space-x-4 > :not([hidden]) ~ :not([hidden]),
+[dir="rtl"] .space-x-6 > :not([hidden]) ~ :not([hidden]) {
+  --tw-space-x-reverse: 1;
+}
+
+[dir="rtl"] .ml-64 {
+  margin-left: 0 !important;
+  margin-right: 16rem !important;
+}
+
+/* Auto-flip directional icons in RTL */
+[dir="rtl"] .lucide-arrow-right,
+[dir="rtl"] .lucide-arrow-left,
+[dir="rtl"] .lucide-chevron-right,
+[dir="rtl"] .lucide-chevron-left,
+[dir="rtl"] .lucide-chevron-first,
+[dir="rtl"] .lucide-chevron-last,
+[dir="rtl"] .lucide-move-right,
+[dir="rtl"] .lucide-move-left {
+  transform: scaleX(-1);
+}

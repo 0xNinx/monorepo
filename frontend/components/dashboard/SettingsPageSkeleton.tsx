@@ -6,7 +6,7 @@ export function SettingsPageSkeleton() {
     <div className="min-h-screen bg-background">
       <DashboardHeader />
 
-      <aside className="fixed left-0 top-0 z-40 h-screen w-64 border-r-3 border-foreground bg-card pt-20">
+      <aside className="fixed left-0 rtl:right-0 rtl:left-auto top-0 z-40 h-screen w-64 border-r-3 rtl:border-r-0 rtl:border-l-3 border-foreground bg-card pt-20">
         <div className="flex h-full flex-col px-4 py-6">
           <div className="mb-8 border-3 border-foreground p-4">
             <Skeleton className="h-4 w-24" />
