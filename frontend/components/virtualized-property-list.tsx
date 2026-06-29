@@ -106,11 +106,15 @@ export function VirtualizedPropertyList({
             }}
           >
             {virtualizedItems.map((property) => (
-              <div key={property.id} role="listitem" style={{ height: ITEM_HEIGHT }}>
+              <div
+                key={property.listingId}
+                role="listitem"
+                style={{ height: ITEM_HEIGHT }}
+              >
                 <PropertyCard
-                  {...propertyListingToCard(property)}
-                  isSaved={savedListingIds.includes(property.id)}
-                  onSaveToggle={() => handleSaveToggle(property.id)}
+                  property={propertyListingToCard(property)}
+                  isFavorited={savedListingIds.includes(property.listingId)}
+                  onFavoriteChange={() => handleSaveToggle(property.listingId)}
                 />
               </div>
             ))}
