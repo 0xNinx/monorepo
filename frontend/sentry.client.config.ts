@@ -1,3 +1,19 @@
+/**
+ * Sentry Client Configuration
+ * 
+ * Classification: Strictly Necessary (Always-On)
+ * 
+ * Rationale under GDPR/NDPR:
+ * Sentry error reporting is classified as "Strictly Necessary" / "Essential" because it is
+ * required to monitor the stability, performance, diagnostics, and security of the Shelterflex platform.
+ * It is not used for behavioural tracking, user profiling, or marketing purposes.
+ * 
+ * Privacy Compliance:
+ * To ensure user privacy remains uncompromised, we aggressively scrub all Personally Identifiable Information (PII)
+ * such as authorization headers, session cookies, passwords, email addresses, phone numbers, and IP addresses
+ * in the `beforeSend` hook before transmission.
+ */
+
 import * as Sentry from "@sentry/nextjs"
 import { scrubEvent, scrubBreadcrumb } from "./lib/pii-scrubber"
 
