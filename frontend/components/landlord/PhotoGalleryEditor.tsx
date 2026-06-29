@@ -1,25 +1,36 @@
-"use client"
+"use client";
 
-import { useCallback, useMemo, useRef, useState } from "react"
-import { GripVertical, Star, Upload, X, Loader2, AlertTriangle } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { Label } from "@/components/ui/label"
-import { deletePropertyPhoto, uploadPropertyPhotos } from "@/lib/landlordPropertiesApi"
-import { cn } from "@/lib/utils"
+import { useCallback, useMemo, useRef, useState } from "react";
+import {
+  GripVertical,
+  Star,
+  Upload,
+  X,
+  Loader2,
+  AlertTriangle,
+  RotateCcw,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import {
+  deletePropertyPhoto,
+  uploadPropertyPhotos,
+} from "@/lib/landlordPropertiesApi";
+import { cn } from "@/lib/utils";
 
 export interface ListingPhoto {
-  id: string
-  preview: string
-  file?: File
+  id: string;
+  preview: string;
+  file?: File;
 }
 
 interface PhotoGalleryEditorProps {
-  propertyId?: string
-  photos: ListingPhoto[]
-  primaryPhotoId: string | null
-  onChange: (photos: ListingPhoto[], primaryPhotoId: string | null) => void
-  maxPhotos?: number
-  minPhotos?: number
+  propertyId?: string;
+  photos: ListingPhoto[];
+  primaryPhotoId: string | null;
+  onChange: (photos: ListingPhoto[], primaryPhotoId: string | null) => void;
+  maxPhotos?: number;
+  minPhotos?: number;
 }
 
 export function PhotoGalleryEditor({
@@ -30,98 +41,141 @@ export function PhotoGalleryEditor({
   maxPhotos = 20,
   minPhotos = 3,
 }: PhotoGalleryEditorProps) {
-  const fileInputRef = useRef<HTMLInputElement>(null)
-  const [dragPhotoId, setDragPhotoId] = useState<string | null>(null)
-  const [uploadingPhotoIds, setUploadingPhotoIds] = useState<Record<string, boolean>>({})
-  const [errors, setErrors] = useState<Record<string, string>>({})
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [dragPhotoId, setDragPhotoId] = useState<string | null>(null);
+  const [uploadingPhotoIds, setUploadingPhotoIds] = useState<
+    Record<string, boolean>
+  >({});
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
-  const availableSlots = maxPhotos - photos.length
+  const availableSlots = maxPhotos - photos.length;
 
   const setPrimary = useCallback(
     (photoId: string) => {
-      onChange(photos, photoId)
+      onChange(photos, photoId);
     },
     [onChange, photos],
-  )
+  );
 
   const updatePhotos = useCallback(
     (nextPhotos: ListingPhoto[]) => {
       const nextPrimary =
-        primaryPhotoId && nextPhotos.some((photo) => photo.id === primaryPhotoId)
+        primaryPhotoId &&
+        nextPhotos.some((photo) => photo.id === primaryPhotoId)
           ? primaryPhotoId
-          : nextPhotos[0]?.id ?? null
-      onChange(nextPhotos, nextPrimary)
+          : (nextPhotos[0]?.id ?? null);
+      onChange(nextPhotos, nextPrimary);
     },
     [onChange, primaryPhotoId],
-  )
+  );
 
   const isPersistedPhoto = useCallback((photo: ListingPhoto) => {
-    return !photo.id.startsWith("photo-") && !photo.id.startsWith("existing-")
-  }, [])
+    return !photo.id.startsWith("photo-") && !photo.id.startsWith("existing-");
+  }, []);
 
   const removePhoto = useCallback(
     async (id: string) => {
-      const nextPhotos = photos.filter((photo) => photo.id !== id)
-      updatePhotos(nextPhotos)
+      const nextPhotos = photos.filter((photo) => photo.id !== id);
+      updatePhotos(nextPhotos);
       setUploadingPhotoIds((prev) => {
-        const next = { ...prev }
-        delete next[id]
-        return next
-      })
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
       setErrors((prev) => {
-        const next = { ...prev }
-        delete next[id]
-        return next
-      })
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
 
-      const removedPhoto = photos.find((photo) => photo.id === id)
+      const removedPhoto = photos.find((photo) => photo.id === id);
       if (!removedPhoto || !propertyId || !isPersistedPhoto(removedPhoto)) {
-        return
+        return;
       }
 
       try {
-        await deletePropertyPhoto(propertyId, id)
+        await deletePropertyPhoto(propertyId, id);
       } catch {
         setErrors((prev) => ({
           ...prev,
-          [id]: 'Unable to delete uploaded photo. It will be removed locally.',
-        }))
+          [id]: "Unable to delete uploaded photo. It will be removed locally.",
+        }));
       }
     },
     [photos, propertyId, updatePhotos, isPersistedPhoto],
-  )
+  );
+
+  const retryUpload = useCallback(
+    async (id: string) => {
+      const photo = photos.find((p) => p.id === id);
+      if (!photo || !photo.file || !propertyId) return;
+
+      setErrors((prev) => {
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
+
+      setUploadingPhotoIds((prev) => ({ ...prev, [id]: true }));
+
+      try {
+        const response = await uploadPropertyPhotos(propertyId, [photo.file]);
+        const uploadedPhoto = response.photos[0];
+
+        const nextPhotos = photos.map((p) =>
+          p.id === id
+            ? { id: uploadedPhoto.id, preview: uploadedPhoto.url }
+            : p,
+        );
+        const nextPrimaryId =
+          primaryPhotoId === id ? uploadedPhoto.id : primaryPhotoId;
+        onChange(nextPhotos, nextPrimaryId);
+      } catch (error) {
+        const errorMessage =
+          error instanceof Error ? error.message : "Upload failed";
+        setErrors((prev) => ({
+          ...prev,
+          [id]: errorMessage,
+        }));
+      } finally {
+        setUploadingPhotoIds((prev) => {
+          const next = { ...prev };
+          delete next[id];
+          return next;
+        });
+      }
+    },
+    [photos, primaryPhotoId, onChange, propertyId],
+  );
 
   const reorderPhoto = useCallback(
     (fromId: string, toId: string) => {
-      if (fromId === toId) return
-      const nextPhotos = [...photos]
-      const fromIndex = nextPhotos.findIndex((photo) => photo.id === fromId)
-      const toIndex = nextPhotos.findIndex((photo) => photo.id === toId)
-      if (fromIndex < 0 || toIndex < 0) return
-      const [moved] = nextPhotos.splice(fromIndex, 1)
-      nextPhotos.splice(toIndex, 0, moved)
-      updatePhotos(nextPhotos)
+      if (fromId === toId) return;
+      const nextPhotos = [...photos];
+      const fromIndex = nextPhotos.findIndex((photo) => photo.id === fromId);
+      const toIndex = nextPhotos.findIndex((photo) => photo.id === toId);
+      if (fromIndex < 0 || toIndex < 0) return;
+      const [moved] = nextPhotos.splice(fromIndex, 1);
+      nextPhotos.splice(toIndex, 0, moved);
+      updatePhotos(nextPhotos);
     },
     [photos, updatePhotos],
-  )
+  );
 
-  const onDrop = useCallback(
-    (event: React.DragEvent) => {
-      event.preventDefault()
-      if (event.dataTransfer.files?.length) {
-        handleFiles(event.dataTransfer.files)
-      }
-    },
-    [],
-  )
+  const onDrop = useCallback((event: React.DragEvent) => {
+    event.preventDefault();
+    if (event.dataTransfer.files?.length) {
+      handleFiles(event.dataTransfer.files);
+    }
+  }, []);
 
   const handleFiles = useCallback(
     async (files: FileList | File[]) => {
       const selected = Array.from(files).filter((file) =>
         file.type.startsWith("image/"),
-      )
+      );
       if (selected.length === 0 || availableSlots <= 0) {
-        return
+        return;
       }
 
       const toAdd = selected.slice(0, availableSlots).map((file) => {
@@ -129,68 +183,78 @@ export function PhotoGalleryEditor({
           id: `photo-${crypto.randomUUID()}`,
           preview: URL.createObjectURL(file),
           file,
-        }
-      })
+        };
+      });
 
-      const nextPhotos = [...photos, ...toAdd]
-      updatePhotos(nextPhotos)
+      const nextPhotos = [...photos, ...toAdd];
+      updatePhotos(nextPhotos);
 
       if (!propertyId) {
-        return
+        return;
       }
 
       const uploadingIds = toAdd.reduce(
         (acc, photo) => ({ ...acc, [photo.id]: true }),
         {} as Record<string, boolean>,
-      )
-      setUploadingPhotoIds((prev) => ({ ...prev, ...uploadingIds }))
+      );
+      setUploadingPhotoIds((prev) => ({ ...prev, ...uploadingIds }));
       setErrors((prev) => {
-        const next = { ...prev }
-        toAdd.forEach((photo) => delete next[photo.id])
-        return next
-      })
+        const next = { ...prev };
+        toAdd.forEach((photo) => delete next[photo.id]);
+        return next;
+      });
 
       try {
-        const response = await uploadPropertyPhotos(propertyId, toAdd.map((photo) => photo.file!))
+        const response = await uploadPropertyPhotos(
+          propertyId,
+          toAdd.map((photo) => photo.file!),
+        );
         const uploadedPhotos: ListingPhoto[] = response.photos.map((photo) => ({
           id: photo.id,
           preview: photo.url,
-        }))
+        }));
 
-        const placeholderMap = new Map(toAdd.map((photo, index) => [photo.id, uploadedPhotos[index]]))
-        const persistedPhotos = nextPhotos.map((photo) => placeholderMap.get(photo.id) ?? photo)
+        const placeholderMap = new Map(
+          toAdd.map((photo, index) => [photo.id, uploadedPhotos[index]]),
+        );
+        const persistedPhotos = nextPhotos.map(
+          (photo) => placeholderMap.get(photo.id) ?? photo,
+        );
         const nextPrimaryId =
           primaryPhotoId && placeholderMap.has(primaryPhotoId)
-            ? placeholderMap.get(primaryPhotoId)?.id ?? primaryPhotoId
-            : primaryPhotoId
-        onChange(persistedPhotos, nextPrimaryId)
+            ? (placeholderMap.get(primaryPhotoId)?.id ?? primaryPhotoId)
+            : primaryPhotoId;
+        onChange(persistedPhotos, nextPrimaryId);
       } catch (error) {
-        const failedIds = toAdd.map((photo) => photo.id)
+        const failedIds = toAdd.map((photo) => photo.id);
         setErrors((prev) => ({
           ...prev,
-          ...Object.fromEntries(failedIds.map((id) => [id, 'Upload failed.'])),
-        }))
+          ...Object.fromEntries(failedIds.map((id) => [id, "Upload failed."])),
+        }));
       } finally {
         setUploadingPhotoIds((prev) => {
-          const next = { ...prev }
-          toAdd.forEach((photo) => delete next[photo.id])
-          return next
-        })
+          const next = { ...prev };
+          toAdd.forEach((photo) => delete next[photo.id]);
+          return next;
+        });
       }
     },
     [availableSlots, photos, propertyId, updatePhotos],
-  )
+  );
 
   const fileBrowse = useCallback(() => {
-    fileInputRef.current?.click()
-  }, [])
+    fileInputRef.current?.click();
+  }, []);
 
   const primaryLabel = useMemo(() => {
     if (photos.length === 0) {
-      return `Upload ${minPhotos} photos to continue.`
+      return `Upload ${minPhotos} photos to continue.`;
     }
-    return `${photos.length} / ${maxPhotos} photos` + (photos.length < minPhotos ? ' (minimum required)' : '')
-  }, [photos.length, maxPhotos, minPhotos])
+    return (
+      `${photos.length} / ${maxPhotos} photos` +
+      (photos.length < minPhotos ? " (minimum required)" : "")
+    );
+  }, [photos.length, maxPhotos, minPhotos]);
 
   return (
     <div>
@@ -202,9 +266,9 @@ export function PhotoGalleryEditor({
         className="hidden"
         onChange={(event) => {
           if (event.target.files) {
-            handleFiles(event.target.files)
+            handleFiles(event.target.files);
           }
-          event.target.value = ""
+          event.target.value = "";
         }}
       />
 
@@ -235,14 +299,18 @@ export function PhotoGalleryEditor({
             onDragOver={(event) => event.preventDefault()}
             onDrop={() => {
               if (dragPhotoId) {
-                reorderPhoto(dragPhotoId, photo.id)
+                reorderPhoto(dragPhotoId, photo.id);
               }
-              setDragPhotoId(null)
+              setDragPhotoId(null);
             }}
             className="relative aspect-video overflow-hidden rounded-md border-2 border-foreground bg-muted"
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={photo.preview} alt="Property photo" className="h-full w-full object-cover" />
+            <img
+              src={photo.preview}
+              alt="Property photo"
+              className="h-full w-full object-cover"
+            />
             <div className="absolute left-1 top-1 flex gap-1">
               <span className="bg-background/90 p-1">
                 <GripVertical className="h-4 w-4" />
@@ -274,8 +342,21 @@ export function PhotoGalleryEditor({
             )}
             {errors[photo.id] && (
               <div className="absolute inset-x-0 bottom-0 bg-destructive/90 p-2 text-xs text-white">
-                <AlertTriangle className="mr-1 inline h-3 w-3" />
-                {errors[photo.id]}
+                <div className="flex items-center justify-between gap-2">
+                  <span className="flex items-center">
+                    <AlertTriangle className="mr-1 inline h-3 w-3" />
+                    {errors[photo.id]}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => retryUpload(photo.id)}
+                    className="flex items-center gap-1 rounded bg-white/20 px-2 py-1 text-xs font-medium hover:bg-white/30"
+                    aria-label="Retry upload"
+                  >
+                    <RotateCcw className="h-3 w-3" />
+                    Retry
+                  </button>
+                </div>
               </div>
             )}
           </div>
@@ -289,5 +370,5 @@ export function PhotoGalleryEditor({
         </span>
       </div>
     </div>
-  )
+  );
 }

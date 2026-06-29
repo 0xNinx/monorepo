@@ -1,13 +1,8 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useState } from "react";
-import {
-  GripVertical,
-  Star,
-  Upload,
-  X,
-  AlertTriangle,
-} from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { z } from "zod";
+import { AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -35,8 +30,107 @@ import {
   type LandlordPropertyRecord,
   type PropertyListingPayload,
 } from "@/lib/landlordPropertiesApi";
-import { cn } from "@/lib/utils"
-import { PhotoGalleryEditor } from "@/components/landlord/PhotoGalleryEditor"
+import { cn } from "@/lib/utils";
+import { PhotoGalleryEditor } from "@/components/landlord/PhotoGalleryEditor";
+import { debounce } from "@/lib/utils";
+
+// Zod validation schema matching backend PropertyListingPayload
+export const ValidationSchema = z
+  .object({
+    title: z
+      .string()
+      .min(5, "Title must be at least 5 characters")
+      .max(200, "Title must not exceed 200 characters"),
+    address: z
+      .string()
+      .min(5, "Address must be at least 5 characters")
+      .min(1, "Address is required"),
+    city: z.string().min(1, "City is required"),
+    area: z.string().optional().default(""),
+    propertyType: z
+      .enum([...PROPERTY_TYPES, ""] as const, {
+        errorMap: () => ({ message: "Property type is required" }),
+      })
+      .refine((v) => v !== "", "Property type is required"),
+    bedrooms: z.coerce
+      .number()
+      .int("Bedrooms must be a whole number")
+      .min(1, "Bedrooms must be at least 1")
+      .max(20, "Bedrooms must not exceed 20"),
+    bathrooms: z.coerce
+      .number()
+      .int("Bathrooms must be a whole number")
+      .min(1, "Bathrooms must be at least 1")
+      .max(20, "Bathrooms must not exceed 20"),
+    sqm: z
+      .union([
+        z
+          .string()
+          .max(0, "")
+          .transform(() => undefined),
+        z.coerce.number().positive("Floor area must be a positive number"),
+      ])
+      .optional(),
+    description: z
+      .string()
+      .max(2000, "Description must not exceed 2000 characters")
+      .optional()
+      .default(""),
+    amenities: z.array(z.enum(PROPERTY_AMENITIES)).optional().default([]),
+    photos: z
+      .array(
+        z.object({
+          id: z.string(),
+          preview: z.string(),
+          file: z.instanceof(File).optional(),
+        }),
+      )
+      .min(3, "At least 3 photos are required")
+      .max(20, "Maximum 20 photos allowed"),
+    primaryPhotoId: z.string().nullable().optional(),
+    negotiatedLandlordRateNgn: z.coerce
+      .number()
+      .positive("Negotiated rate must be a positive number"),
+    outrightPriceNgn: z.coerce
+      .number()
+      .positive("Outright price must be a positive number"),
+    installmentBasePriceNgn: z.coerce
+      .number()
+      .positive("Installment base price must be a positive number"),
+    videoUrl: z
+      .union([
+        z.string().url("Video URL must be a valid URL"),
+        z
+          .string()
+          .max(0, "")
+          .transform(() => undefined),
+      ])
+      .optional(),
+  })
+  .refine(
+    (data) => {
+      // Outright price must not exceed installment base price
+      return data.outrightPriceNgn <= data.installmentBasePriceNgn;
+    },
+    {
+      message: "Outright price must not exceed installment base price",
+      path: ["outrightPriceNgn"],
+    },
+  )
+  .refine(
+    (data) => {
+      // Outright margin >= 5%
+      if (data.negotiatedLandlordRateNgn <= 0) return false;
+      const margin =
+        (data.outrightPriceNgn - data.negotiatedLandlordRateNgn) /
+        data.negotiatedLandlordRateNgn;
+      return margin >= MIN_OUTRIGHT_MARGIN_PERCENT;
+    },
+    {
+      message: `Outright margin must be at least ${MIN_OUTRIGHT_MARGIN_PERCENT * 100}%`,
+      path: ["outrightPriceNgn"],
+    },
+  );
 
 export interface ListingPhoto {
   id: string;
@@ -203,6 +297,79 @@ export function PropertyListingForm({
     defaultValues(initialProperty),
   );
   const [submitting, setSubmitting] = useState(false);
+  const [serverError, setServerError] = useState<string | null>(null);
+  const [fieldServerErrors, setFieldServerErrors] = useState<
+    Record<string, string>
+  >({});
+  const firstErrorRef = useRef<HTMLInputElement | HTMLTextAreaElement | null>(
+    null,
+  );
+
+  const propertyId = initialProperty?.id;
+  const draftKey = `property-listing-draft-${propertyId || "new"}`;
+
+  // Draft autosave with debounce (2s)
+  const saveDraft = useCallback(() => {
+    try {
+      localStorage.setItem(draftKey, JSON.stringify(values));
+    } catch (err) {
+      console.error("Failed to save draft:", err);
+    }
+  }, [values, draftKey]);
+
+  const debouncedSaveDraft = useMemo(
+    () => debounce(saveDraft, 2000),
+    [saveDraft],
+  );
+
+  useEffect(() => {
+    debouncedSaveDraft();
+  }, [values, debouncedSaveDraft]);
+
+  // Load draft on mount if exists
+  useEffect(() => {
+    const savedDraft = localStorage.getItem(draftKey);
+    if (savedDraft) {
+      try {
+        const draft = JSON.parse(savedDraft);
+        // Check if draft is stale (compare with props)
+        if (draft.title !== defaultValues(initialProperty).title) {
+          const shouldRestore = window.confirm(
+            "A draft was found. Would you like to restore it?",
+          );
+          if (shouldRestore) {
+            setValues(draft);
+          } else {
+            localStorage.removeItem(draftKey);
+          }
+        }
+      } catch (err) {
+        console.error("Failed to load draft:", err);
+        localStorage.removeItem(draftKey);
+      }
+    }
+  }, [propertyId, draftKey, initialProperty]);
+
+  // Clear draft on successful submit
+  const clearDraft = useCallback(() => {
+    localStorage.removeItem(draftKey);
+  }, [draftKey]);
+
+  // Warn on navigate if unsaved changes
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      const currentDefaults = defaultValues(initialProperty);
+      const hasChanges =
+        JSON.stringify(values) !== JSON.stringify(currentDefaults);
+      if (hasChanges) {
+        e.preventDefault();
+        e.returnValue = "";
+      }
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [values, initialProperty]);
 
   const margin = useMemo(() => {
     const negotiated = parseFloat(values.negotiatedLandlordRateNgn) || 0;
@@ -216,7 +383,6 @@ export function PropertyListingForm({
     values.installmentBasePriceNgn,
   ]);
 
-
   const toggleAmenity = (amenity: PropertyAmenity) => {
     setValues((prev) => ({
       ...prev,
@@ -226,15 +392,66 @@ export function PropertyListingForm({
     }));
   };
 
-  const canProceedFromMedia = values.photos.length >= 3 && values.photos.length <= 20;
+  const canProceedFromMedia =
+    values.photos.length >= 3 && values.photos.length <= 20;
+
+  // Map common server errors to field-specific errors
+  const mapServerErrors = (error: Error | unknown) => {
+    const fieldErrors: Record<string, string> = {};
+    const errorMessage = error instanceof Error ? error.message : String(error);
+
+    if (errorMessage.includes("title") && errorMessage.includes("exists")) {
+      fieldErrors.title = "This title is already in use";
+    } else if (errorMessage.includes("photo")) {
+      if (errorMessage.includes("403")) {
+        fieldErrors.photos = "Permission denied to upload photos";
+      } else if (errorMessage.includes("413")) {
+        fieldErrors.photos = "Photos are too large to upload";
+      } else {
+        fieldErrors.photos = "Failed to upload photos";
+      }
+    }
+
+    return fieldErrors;
+  };
+
+  // Focus first field with error
+  const focusFirstError = () => {
+    if (firstErrorRef.current) {
+      firstErrorRef.current.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
+      firstErrorRef.current.focus();
+    }
+  };
 
   const handleSubmit = async () => {
     if (!canProceedFromMedia) return;
-    setSubmitting(true);
+
+    setServerError(null);
+    setFieldServerErrors({});
+    firstErrorRef.current = null;
+
     try {
-      const { photos } = await photosToPayload(values.photos, values.primaryPhotoId);
+      const { photos } = await photosToPayload(
+        values.photos,
+        values.primaryPhotoId,
+      );
       const payload = buildListingPayload(values, photos);
+      setSubmitting(true);
       await onSubmit(payload);
+      clearDraft();
+    } catch (error) {
+      const mappedErrors = mapServerErrors(error);
+      if (Object.keys(mappedErrors).length > 0) {
+        setFieldServerErrors(mappedErrors);
+        focusFirstError();
+      } else {
+        const message =
+          error instanceof Error ? error.message : "Failed to submit listing";
+        setServerError(message);
+      }
     } finally {
       setSubmitting(false);
     }
@@ -242,6 +459,20 @@ export function PropertyListingForm({
 
   return (
     <div className="space-y-6">
+      {serverError && (
+        <Card className="border-3 border-destructive bg-destructive/10 p-4">
+          <div className="flex gap-3">
+            <AlertTriangle className="h-5 w-5 flex-shrink-0 text-destructive" />
+            <div>
+              <p className="font-bold text-destructive">
+                Error submitting listing
+              </p>
+              <p className="text-sm">{serverError}</p>
+            </div>
+          </div>
+        </Card>
+      )}
+
       <div className="flex flex-wrap gap-2">
         {STEP_LABELS.map((label, index) => {
           const n = index + 1;
@@ -268,22 +499,53 @@ export function PropertyListingForm({
             <div>
               <Label htmlFor="title">Title</Label>
               <Input
+                ref={(el) => {
+                  if (el && !firstErrorRef.current) firstErrorRef.current = el;
+                }}
                 id="title"
                 value={values.title}
-                onChange={(e) => setValues({ ...values, title: e.target.value })}
-                className="border-2 border-foreground"
+                onChange={(e) =>
+                  setValues({ ...values, title: e.target.value })
+                }
+                className={cn(
+                  "border-2 border-foreground",
+                  fieldServerErrors.title && "border-red-400",
+                )}
+                aria-describedby={
+                  fieldServerErrors.title ? "field-error-title" : undefined
+                }
               />
+              {fieldServerErrors.title && (
+                <p
+                  id="field-error-title"
+                  role="alert"
+                  className="mt-1 text-sm text-red-600"
+                >
+                  {fieldServerErrors.title}
+                </p>
+              )}
             </div>
             <div className="grid gap-4 md:grid-cols-2">
               <div>
-                <Label>Property type</Label>
+                <Label htmlFor="propertyType">Property type</Label>
                 <Select
                   value={values.propertyType}
                   onValueChange={(v) =>
                     setValues({ ...values, propertyType: v as PropertyType })
                   }
                 >
-                  <SelectTrigger className="border-2 border-foreground">
+                  <SelectTrigger
+                    id="propertyType"
+                    className={cn(
+                      "border-2 border-foreground",
+                      fieldServerErrors.propertyType && "border-red-400",
+                    )}
+                    aria-describedby={
+                      fieldServerErrors.propertyType
+                        ? "field-error-propertyType"
+                        : undefined
+                    }
+                  >
                     <SelectValue placeholder="Select type" />
                   </SelectTrigger>
                   <SelectContent>
@@ -294,14 +556,32 @@ export function PropertyListingForm({
                     ))}
                   </SelectContent>
                 </Select>
+                {fieldServerErrors.propertyType && (
+                  <p
+                    id="field-error-propertyType"
+                    role="alert"
+                    className="mt-1 text-sm text-red-600"
+                  >
+                    {fieldServerErrors.propertyType}
+                  </p>
+                )}
               </div>
               <div>
-                <Label>City</Label>
+                <Label htmlFor="city">City</Label>
                 <Select
                   value={values.city}
                   onValueChange={(v) => setValues({ ...values, city: v })}
                 >
-                  <SelectTrigger className="border-2 border-foreground">
+                  <SelectTrigger
+                    id="city"
+                    className={cn(
+                      "border-2 border-foreground",
+                      fieldServerErrors.city && "border-red-400",
+                    )}
+                    aria-describedby={
+                      fieldServerErrors.city ? "field-error-city" : undefined
+                    }
+                  >
                     <SelectValue placeholder="City" />
                   </SelectTrigger>
                   <SelectContent>
@@ -312,6 +592,15 @@ export function PropertyListingForm({
                     ))}
                   </SelectContent>
                 </Select>
+                {fieldServerErrors.city && (
+                  <p
+                    id="field-error-city"
+                    role="alert"
+                    className="mt-1 text-sm text-red-600"
+                  >
+                    {fieldServerErrors.city}
+                  </p>
+                )}
               </div>
             </div>
             <div>
@@ -320,17 +609,49 @@ export function PropertyListingForm({
                 id="area"
                 value={values.area}
                 onChange={(e) => setValues({ ...values, area: e.target.value })}
-                className="border-2 border-foreground"
+                className={cn(
+                  "border-2 border-foreground",
+                  fieldServerErrors.area && "border-red-400",
+                )}
+                aria-describedby={
+                  fieldServerErrors.area ? "field-error-area" : undefined
+                }
               />
+              {fieldServerErrors.area && (
+                <p
+                  id="field-error-area"
+                  role="alert"
+                  className="mt-1 text-sm text-red-600"
+                >
+                  {fieldServerErrors.area}
+                </p>
+              )}
             </div>
             <div>
               <Label htmlFor="address">Full address</Label>
               <Input
                 id="address"
                 value={values.address}
-                onChange={(e) => setValues({ ...values, address: e.target.value })}
-                className="border-2 border-foreground"
+                onChange={(e) =>
+                  setValues({ ...values, address: e.target.value })
+                }
+                className={cn(
+                  "border-2 border-foreground",
+                  fieldServerErrors.address && "border-red-400",
+                )}
+                aria-describedby={
+                  fieldServerErrors.address ? "field-error-address" : undefined
+                }
               />
+              {fieldServerErrors.address && (
+                <p
+                  id="field-error-address"
+                  role="alert"
+                  className="mt-1 text-sm text-red-600"
+                >
+                  {fieldServerErrors.address}
+                </p>
+              )}
             </div>
             <div className="grid grid-cols-3 gap-4">
               <div>
@@ -338,26 +659,62 @@ export function PropertyListingForm({
                 <Input
                   id="beds"
                   type="number"
-                  min={0}
+                  min={1}
+                  max={20}
                   value={values.bedrooms}
                   onChange={(e) =>
                     setValues({ ...values, bedrooms: e.target.value })
                   }
-                  className="border-2 border-foreground"
+                  className={cn(
+                    "border-2 border-foreground",
+                    fieldServerErrors.bedrooms && "border-red-400",
+                  )}
+                  aria-describedby={
+                    fieldServerErrors.bedrooms
+                      ? "field-error-bedrooms"
+                      : undefined
+                  }
                 />
+                {fieldServerErrors.bedrooms && (
+                  <p
+                    id="field-error-bedrooms"
+                    role="alert"
+                    className="mt-1 text-sm text-red-600"
+                  >
+                    {fieldServerErrors.bedrooms}
+                  </p>
+                )}
               </div>
               <div>
                 <Label htmlFor="baths">Bathrooms</Label>
                 <Input
                   id="baths"
                   type="number"
-                  min={0}
+                  min={1}
+                  max={20}
                   value={values.bathrooms}
                   onChange={(e) =>
                     setValues({ ...values, bathrooms: e.target.value })
                   }
-                  className="border-2 border-foreground"
+                  className={cn(
+                    "border-2 border-foreground",
+                    fieldServerErrors.bathrooms && "border-red-400",
+                  )}
+                  aria-describedby={
+                    fieldServerErrors.bathrooms
+                      ? "field-error-bathrooms"
+                      : undefined
+                  }
                 />
+                {fieldServerErrors.bathrooms && (
+                  <p
+                    id="field-error-bathrooms"
+                    role="alert"
+                    className="mt-1 text-sm text-red-600"
+                  >
+                    {fieldServerErrors.bathrooms}
+                  </p>
+                )}
               </div>
               <div>
                 <Label htmlFor="sqm">Floor area (sqm)</Label>
@@ -366,9 +723,26 @@ export function PropertyListingForm({
                   type="number"
                   min={0}
                   value={values.sqm}
-                  onChange={(e) => setValues({ ...values, sqm: e.target.value })}
-                  className="border-2 border-foreground"
+                  onChange={(e) =>
+                    setValues({ ...values, sqm: e.target.value })
+                  }
+                  className={cn(
+                    "border-2 border-foreground",
+                    fieldServerErrors.sqm && "border-red-400",
+                  )}
+                  aria-describedby={
+                    fieldServerErrors.sqm ? "field-error-sqm" : undefined
+                  }
                 />
+                {fieldServerErrors.sqm && (
+                  <p
+                    id="field-error-sqm"
+                    role="alert"
+                    className="mt-1 text-sm text-red-600"
+                  >
+                    {fieldServerErrors.sqm}
+                  </p>
+                )}
               </div>
             </div>
             <div>
@@ -380,8 +754,25 @@ export function PropertyListingForm({
                 onChange={(e) =>
                   setValues({ ...values, description: e.target.value })
                 }
-                className="border-2 border-foreground"
+                className={cn(
+                  "border-2 border-foreground",
+                  fieldServerErrors.description && "border-red-400",
+                )}
+                aria-describedby={
+                  fieldServerErrors.description
+                    ? "field-error-description"
+                    : undefined
+                }
               />
+              {fieldServerErrors.description && (
+                <p
+                  id="field-error-description"
+                  role="alert"
+                  className="mt-1 text-sm text-red-600"
+                >
+                  {fieldServerErrors.description}
+                </p>
+              )}
             </div>
           </div>
           <div className="mt-6 flex justify-end">
@@ -445,6 +836,11 @@ export function PropertyListingForm({
           >
             {values.photos.length} / 20 photos (minimum 3 required)
           </p>
+          {fieldServerErrors.photos && (
+            <p role="alert" className="mt-2 text-sm text-red-600">
+              {fieldServerErrors.photos}
+            </p>
+          )}
           <div className="mt-4">
             <Label htmlFor="videoUrl">Video URL (optional)</Label>
             <Input
@@ -455,8 +851,23 @@ export function PropertyListingForm({
               onChange={(e) =>
                 setValues({ ...values, videoUrl: e.target.value })
               }
-              className="border-2 border-foreground"
+              className={cn(
+                "border-2 border-foreground",
+                fieldServerErrors.videoUrl && "border-red-400",
+              )}
+              aria-describedby={
+                fieldServerErrors.videoUrl ? "field-error-videoUrl" : undefined
+              }
             />
+            {fieldServerErrors.videoUrl && (
+              <p
+                id="field-error-videoUrl"
+                role="alert"
+                className="mt-1 text-sm text-red-600"
+              >
+                {fieldServerErrors.videoUrl}
+              </p>
+            )}
           </div>
           <div className="mt-6 flex justify-between">
             <Button type="button" variant="outline" onClick={() => setStep(2)}>
@@ -478,9 +889,11 @@ export function PropertyListingForm({
           <h2 className="mb-4 text-xl font-bold">Pricing</h2>
           <div className="grid gap-4 md:grid-cols-3">
             <div>
-              <Label>Negotiated landlord rate (₦)</Label>
+              <Label htmlFor="negotiated">Negotiated landlord rate (₦)</Label>
               <Input
+                id="negotiated"
                 type="number"
+                min={0}
                 value={values.negotiatedLandlordRateNgn}
                 onChange={(e) =>
                   setValues({
@@ -488,24 +901,63 @@ export function PropertyListingForm({
                     negotiatedLandlordRateNgn: e.target.value,
                   })
                 }
-                className="border-2 border-foreground"
+                className={cn(
+                  "border-2 border-foreground",
+                  fieldServerErrors.negotiatedLandlordRateNgn &&
+                    "border-red-400",
+                )}
+                aria-describedby={
+                  fieldServerErrors.negotiatedLandlordRateNgn
+                    ? "field-error-negotiatedLandlordRateNgn"
+                    : undefined
+                }
               />
+              {fieldServerErrors.negotiatedLandlordRateNgn && (
+                <p
+                  id="field-error-negotiatedLandlordRateNgn"
+                  role="alert"
+                  className="mt-1 text-sm text-red-600"
+                >
+                  {fieldServerErrors.negotiatedLandlordRateNgn}
+                </p>
+              )}
             </div>
             <div>
-              <Label>Outright (cash) price (₦)</Label>
+              <Label htmlFor="outright">Outright (cash) price (₦)</Label>
               <Input
+                id="outright"
                 type="number"
+                min={0}
                 value={values.outrightPriceNgn}
                 onChange={(e) =>
                   setValues({ ...values, outrightPriceNgn: e.target.value })
                 }
-                className="border-2 border-foreground"
+                className={cn(
+                  "border-2 border-foreground",
+                  fieldServerErrors.outrightPriceNgn && "border-red-400",
+                )}
+                aria-describedby={
+                  fieldServerErrors.outrightPriceNgn
+                    ? "field-error-outrightPriceNgn"
+                    : undefined
+                }
               />
+              {fieldServerErrors.outrightPriceNgn && (
+                <p
+                  id="field-error-outrightPriceNgn"
+                  role="alert"
+                  className="mt-1 text-sm text-red-600"
+                >
+                  {fieldServerErrors.outrightPriceNgn}
+                </p>
+              )}
             </div>
             <div>
-              <Label>Installment base price (₦)</Label>
+              <Label htmlFor="installment">Installment base price (₦)</Label>
               <Input
+                id="installment"
                 type="number"
+                min={0}
                 value={values.installmentBasePriceNgn}
                 onChange={(e) =>
                   setValues({
@@ -513,8 +965,25 @@ export function PropertyListingForm({
                     installmentBasePriceNgn: e.target.value,
                   })
                 }
-                className="border-2 border-foreground"
+                className={cn(
+                  "border-2 border-foreground",
+                  fieldServerErrors.installmentBasePriceNgn && "border-red-400",
+                )}
+                aria-describedby={
+                  fieldServerErrors.installmentBasePriceNgn
+                    ? "field-error-installmentBasePriceNgn"
+                    : undefined
+                }
               />
+              {fieldServerErrors.installmentBasePriceNgn && (
+                <p
+                  id="field-error-installmentBasePriceNgn"
+                  role="alert"
+                  className="mt-1 text-sm text-red-600"
+                >
+                  {fieldServerErrors.installmentBasePriceNgn}
+                </p>
+              )}
             </div>
           </div>
           {margin && (
@@ -620,7 +1089,8 @@ export function PropertyListingForm({
             >
               {submitting
                 ? "Submitting..."
-                : submitLabel ?? (mode === "edit" ? "Save changes" : "Submit listing")}
+                : (submitLabel ??
+                  (mode === "edit" ? "Save changes" : "Submit listing"))}
             </Button>
           </div>
         </Card>
