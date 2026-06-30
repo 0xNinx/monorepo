@@ -63,7 +63,7 @@ export default async function LocaleLayout({
   const dir = rtlLocales.includes(locale as Locale) ? "rtl" : "ltr";
 
   return (
-    <NextIntlClientProvider messages={messages}>
+    <NextIntlClientProvider locale={locale} messages={messages}>
       <LocaleDocumentSync locale={locale} dir={dir} />
       <ErrorBoundary>
         <ServiceWorkerRegister />

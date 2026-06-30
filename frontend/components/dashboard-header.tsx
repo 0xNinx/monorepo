@@ -28,7 +28,11 @@ export function DashboardHeader() {
               type="button"
               variant="outline"
               className="border-2 border-foreground bg-transparent font-bold shadow-[2px_2px_0px_0px_rgba(26,26,26,1)]"
-              aria-label="Notifications"
+              aria-label={
+                unread > 0
+                  ? `Notifications, ${unread} unread`
+                  : "Notifications"
+              }
             >
               <Bell className="h-4 w-4" />
               {unread > 0 && (
@@ -69,7 +73,11 @@ export function DashboardHeader() {
 
         {/* Mobile Menu Button */}
         <button
-          className="md:hidden border-2 border-foreground p-2"
+          type="button"
+          aria-label={mobileMenuOpen ? "Close menu" : "Open menu"}
+          aria-expanded={mobileMenuOpen}
+          aria-controls="dashboard-header-mobile-menu"
+          className="md:hidden border-2 border-foreground p-2 outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
           onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
         >
           {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
@@ -78,7 +86,10 @@ export function DashboardHeader() {
 
       {/* Mobile Menu */}
       {mobileMenuOpen && (
-        <div className="md:hidden border-t-2 border-foreground bg-card p-4 space-y-2">
+        <div
+          id="dashboard-header-mobile-menu"
+          className="md:hidden border-t-2 border-foreground bg-card p-4 space-y-2"
+        >
           <Link href="/" className="block">
             <Button variant="outline" className="w-full border-2 border-foreground justify-start bg-transparent">
               <Home className="mr-2 h-4 w-4" />

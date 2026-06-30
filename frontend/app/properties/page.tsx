@@ -50,7 +50,32 @@ function PropertiesContent() {
     searchParams.get("query") || "",
   );
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const saved = sessionStorage.getItem('properties_scroll_y');
+    if (saved) {
+      const y = parseInt(saved, 10);
+      if (!isNaN(y)) {
+        requestAnimationFrame(() => window.scrollTo(0, y));
+      }
+      sessionStorage.removeItem('properties_scroll_y');
+    }
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (typeof window !== 'undefined') {
+        sessionStorage.setItem('properties_scroll_y', String(window.scrollY));
+      }
+    };
+  }, []);
+
   // Filter state from URL
+  const VALID_SORT = ["newest", "price_asc", "price_desc", "bedrooms_desc"];
+  const rawSort = searchParams.get("sortBy") || "";
+  const sortBy = VALID_SORT.includes(rawSort) ? rawSort : "newest";
+  const rawPage = parseInt(searchParams.get("page") || "", 10);
+  const page = !isNaN(rawPage) && rawPage > 0 ? rawPage : 1;
   const city = searchParams.get("city") || "";
   const area = searchParams.get("area") || "";
   const minBedrooms = searchParams.get("minBedrooms") || "";
@@ -59,8 +84,6 @@ function PropertiesContent() {
   const maxBathrooms = searchParams.get("maxBathrooms") || "";
   const minAnnualRent = searchParams.get("minAnnualRent") || "";
   const maxAnnualRent = searchParams.get("maxAnnualRent") || "";
-  const sortBy = searchParams.get("sortBy") || "newest";
-  const page = parseInt(searchParams.get("page") || "1", 10);
 
   const updateParams = (updates: Record<string, string>) => {
     const newParams = new URLSearchParams(searchParams.toString());
@@ -304,8 +327,17 @@ function PropertiesContent() {
                   <Input
                     type="text"
                     placeholder="e.g. Lekki, Victoria Island"
-                    value={area}
-                    onChange={(e) => updateParams({ area: e.target.value })}
+                    defaultValue={area}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      const timeout = setTimeout(() => updateParams({ area: val }), 400);
+                      (e.target as HTMLInputElement).dataset.debounce = String(timeout);
+                    }}
+                    onBlur={(e) => {
+                      const timeout = parseInt(e.target.dataset.debounce || "0", 10);
+                      if (timeout) clearTimeout(timeout);
+                      updateParams({ area: e.target.value });
+                    }}
                     className="border-2 border-foreground bg-background"
                   />
                 </div>

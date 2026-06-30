@@ -13,6 +13,7 @@ members = [
   "deal_escrow",
   "contract_access",
   "timelock",
+  "rent_schedule",
   "vesting_schedule",
 
   "schema_registry",
@@ -27,7 +28,18 @@ members = [
   "inspector_bond",
   "rent_to_own",
   "governance",
+  "multisig_admin",
 ]
+
+[profile.release]
+opt-level = "z"
+overflow-checks = true
+debug = 0
+strip = "symbols"
+debug-assertions = false
+panic = "abort"
+codegen-units = 1
+lto = true
 
 [profile.release-with-logs]
 inherits = "release"

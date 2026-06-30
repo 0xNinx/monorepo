@@ -28,6 +28,7 @@ import { cn } from "@/lib/utils";
 import { LandlordVerificationBadge } from "@/components/LandlordVerificationBadge";
 import { setListingSaved } from "@/lib/savedPropertiesApi";
 import { showErrorToast } from "@/lib/toast";
+import { formatNgn } from "@/lib/currency";
 
 export type PropertyCardPaymentType = "outright" | "installment";
 
@@ -68,17 +69,13 @@ export interface PropertyCardProps {
 
 const DEFAULT_PLAN_MONTHS = 12;
 
-function formatNgn(amount: number) {
-  return new Intl.NumberFormat("en-NG", {
-    style: "currency",
-    currency: "NGN",
-    minimumFractionDigits: 0,
-  }).format(amount);
-}
-
 function formatLocation(property: PropertyCardData) {
   const parts = [property.area, property.city].filter(Boolean);
   return parts.length > 0 ? parts.join(", ") : "Nigeria";
+}
+
+function propertyAccessibleName(property: PropertyCardData) {
+  return `${property.address}, ${formatLocation(property)}`;
 }
 
 function resolvePaymentType(property: PropertyCardData): PropertyCardPaymentType {
@@ -99,11 +96,11 @@ function getCarouselImages(property: PropertyCardData): string[] {
 }
 
 function imageAltText(property: PropertyCardData, index: number, total: number) {
-  const location = formatLocation(property);
+  const name = propertyAccessibleName(property);
   if (total <= 1) {
-    return `Photo of ${property.address}, ${location}`;
+    return `Photo of ${name}`;
   }
-  return `Photo ${index + 1} of ${total} for ${property.address}, ${location}`;
+  return `Photo ${index + 1} of ${total} for ${name}`;
 }
 
 interface PropertyImageCarouselProps {
@@ -119,6 +116,7 @@ export function PropertyImageCarousel({
 }: PropertyImageCarouselProps) {
   const images = getCarouselImages(property);
   const slideCount = Math.max(images.length, 1);
+  const propertyName = propertyAccessibleName(property);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [activeIndex, setActiveIndex] = useState(0);
   const carouselId = useId();
@@ -163,7 +161,7 @@ export function PropertyImageCarousel({
         ref={scrollRef}
         role="region"
         aria-roledescription="carousel"
-        aria-label={`Photos for ${property.address}`}
+        aria-label={`Photos for ${propertyName}`}
         tabIndex={showControls ? 0 : -1}
         onKeyDown={handleKeyDown}
         onScroll={handleScroll}
@@ -180,7 +178,7 @@ export function PropertyImageCarousel({
               className="relative h-full w-full shrink-0 snap-center snap-always"
               role="group"
               aria-roledescription="slide"
-              aria-label={`${index + 1} of ${slideCount}`}
+              aria-label={`Photo ${index + 1} of ${slideCount}`}
             >
               <Image
                 src={src}
@@ -195,7 +193,7 @@ export function PropertyImageCarousel({
           <div
             className="flex h-full w-full shrink-0 snap-center items-center justify-center text-muted-foreground"
             role="img"
-            aria-label={`No photos available for ${property.address}`}
+            aria-label={`No photos available for ${propertyName}`}
           >
             <Home className="h-12 w-12" aria-hidden />
           </div>
@@ -208,7 +206,7 @@ export function PropertyImageCarousel({
         <>
           <button
             type="button"
-            aria-label="Previous photo"
+            aria-label={`Previous photo of ${propertyName}`}
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
@@ -221,7 +219,7 @@ export function PropertyImageCarousel({
           </button>
           <button
             type="button"
-            aria-label="Next photo"
+            aria-label={`Next photo of ${propertyName}`}
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
@@ -240,7 +238,7 @@ export function PropertyImageCarousel({
               <button
                 key={index}
                 type="button"
-                aria-label={`Go to photo ${index + 1}`}
+                aria-label={`Go to photo ${index + 1} of ${propertyName}`}
                 aria-current={index === activeIndex ? "true" : undefined}
                 onClick={(e) => {
                   e.preventDefault();
@@ -284,6 +282,7 @@ export function PropertyCard({
   const paymentType = resolvePaymentType(property);
   const planMonths = property.installmentPlanMonths ?? DEFAULT_PLAN_MONTHS;
   const locationLabel = formatLocation(property);
+  const propertyName = propertyAccessibleName(property);
   const detailHref = href ?? `/properties/${property.listingId}`;
 
   const showBothPrices =
@@ -350,7 +349,9 @@ export function PropertyCard({
   const favoriteButton = showFavorite ? (
     <button
       type="button"
-      aria-label={favorited ? "Remove from saved" : "Save property"}
+      aria-label={
+        favorited ? `Saved: ${propertyName}` : `Save property: ${propertyName}`
+      }
       aria-pressed={favorited}
       disabled={favoritePending}
       onClick={handleFavoriteClick}
@@ -418,7 +419,10 @@ export function PropertyCard({
         <div className="flex items-end justify-between gap-2">
           <div>{priceBlock}</div>
           {variant === "grid" && (
-            <Link href={detailHref}>
+            <Link
+              href={detailHref}
+              aria-label={`View details for ${propertyName}`}
+            >
               <Button className="border-2 border-foreground bg-primary px-4 py-2 text-sm font-bold shadow-[2px_2px_0px_0px_rgba(26,26,26,1)] transition-all hover:translate-x-px hover:translate-y-px hover:shadow-[1px_1px_0px_0px_rgba(26,26,26,1)]">
                 View
               </Button>

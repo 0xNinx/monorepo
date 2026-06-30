@@ -8,6 +8,7 @@ import {
   ANNUAL_INTEREST_RATE,
   ESTIMATED_RENTAL_YIELD,
 } from "@/lib/rentToOwnCalc";
+import { formatCompactNgn, formatNgn } from "@/lib/currency";
 import dynamic from "next/dynamic";
 
 const EquityProgressChart = dynamic(() => import("./EquityProgressChart"), {
@@ -21,15 +22,6 @@ const EquityProgressChart = dynamic(() => import("./EquityProgressChart"), {
   ),
 });
 import RentToOwnPlanCard from "./RentToOwnPlanCard";
-
-function formatFull(val: number): string {
-  return new Intl.NumberFormat("en-NG", {
-    style: "currency",
-    currency: "NGN",
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(val);
-}
 
 export default function RentToOwnCalculator() {
   const [propertyPrice, setPropertyPrice] = useState(15_000_000);
@@ -79,7 +71,7 @@ export default function RentToOwnCalculator() {
                   Property Price
                 </p>
                 <span className="border-2 border-foreground bg-muted px-2 py-1 font-mono text-base font-black sm:px-3 sm:text-lg">
-                  {formatFull(propertyPrice)}
+                  {formatNgn(propertyPrice)}
                 </span>
               </div>
               <Slider
@@ -91,8 +83,8 @@ export default function RentToOwnCalculator() {
                 className="py-4"
               />
               <div className="flex justify-between text-xs text-muted-foreground">
-                <span>₦2M</span>
-                <span>₦200M</span>
+                <span>{formatCompactNgn(2_000_000)}</span>
+                <span>{formatCompactNgn(200_000_000)}</span>
               </div>
             </div>
 
@@ -103,7 +95,7 @@ export default function RentToOwnCalculator() {
                   Deposit Percentage
                 </p>
                 <span className="border-2 border-foreground bg-muted px-2 py-1 font-mono text-base font-black sm:px-3 sm:text-lg">
-                  {depositPct}% — {formatFull(propertyPrice * depositPct / 100)}
+                  {depositPct}% - {formatNgn(propertyPrice * depositPct / 100)}
                 </span>
               </div>
               <Slider
@@ -127,7 +119,7 @@ export default function RentToOwnCalculator() {
                   Monthly Budget
                 </p>
                 <span className="border-2 border-foreground bg-muted px-2 py-1 font-mono text-base font-black sm:px-3 sm:text-lg">
-                  {formatFull(monthlyBudget)}
+                  {formatNgn(monthlyBudget)}
                 </span>
               </div>
               <Slider
@@ -139,8 +131,8 @@ export default function RentToOwnCalculator() {
                 className="py-4"
               />
               <div className="flex justify-between text-xs text-muted-foreground">
-                <span>₦50K</span>
-                <span>₦5M</span>
+                <span>{formatCompactNgn(50_000)}</span>
+                <span>{formatCompactNgn(5_000_000)}</span>
               </div>
             </div>
 
@@ -196,11 +188,11 @@ export default function RentToOwnCalculator() {
               <AlertCircle className="h-5 w-5 shrink-0 text-destructive mt-0.5" />
               <div>
                 <p className="font-mono text-sm font-bold text-destructive">
-                  Minimum required: {formatFull(result.requiredMonthlyPayment)}/mo
+                  Minimum required: {formatNgn(result.requiredMonthlyPayment)}/mo
                 </p>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Your ₦{(monthlyBudget / 1000).toFixed(0)}K budget is{" "}
-                  {formatFull(result.requiredMonthlyPayment - monthlyBudget)} short.
+                  Your {formatCompactNgn(monthlyBudget)} budget is{" "}
+                  {formatNgn(result.requiredMonthlyPayment - monthlyBudget)} short.
                   Try raising your budget, increasing your deposit, or extending
                   the ownership timeline.
                 </p>

@@ -2,6 +2,9 @@ interface StorageItem {
   value: string
   expires?: number
   iv?: string
+  tag?: string
+  namespace?: string
+  v: number
 }
 
 class SecureStorage {
@@ -37,6 +40,13 @@ class SecureStorage {
     }
   }
 
+  private async computeTag(data: string, namespace: string, iv: string): Promise<string> {
+    const encoder = new TextEncoder()
+    const tagData = encoder.encode(`${data}:${namespace}:${iv}`)
+    const hashBuffer = await globalThis.crypto.subtle.digest('SHA-256', tagData)
+    return btoa(String.fromCodePoint(...new Uint8Array(hashBuffer)))
+  }
+
   private async decrypt(encrypted: string, iv: string): Promise<string> {
     if (typeof globalThis === 'undefined' || !globalThis.crypto?.subtle) {
       // Fallback for environments without Web Crypto API
@@ -70,18 +80,21 @@ class SecureStorage {
     return decoder.decode(decrypted)
   }
 
-  async setItem(key: string, value: string, ttl?: number): Promise<void> {
+  async setItem(key: string, value: string, ttl?: number, namespace: string = 'default'): Promise<void> {
     if (typeof globalThis === 'undefined') return
 
     const item: StorageItem = {
       value,
-      expires: ttl ? Date.now() + ttl : undefined
+      expires: ttl ? Date.now() + ttl : undefined,
+      namespace,
+      v: 1,
     }
 
     try {
       const { encrypted, iv } = await this.encrypt(value)
       item.value = encrypted
       item.iv = iv
+      item.tag = await this.computeTag(encrypted, namespace, iv)
       globalThis.localStorage?.setItem(this.prefix + key, JSON.stringify(item))
     } catch (error) {
       console.warn('Encryption failed, storing unencrypted:', error)
@@ -102,6 +115,16 @@ class SecureStorage {
       if (item.expires && Date.now() > item.expires) {
         this.removeItem(key)
         return null
+      }
+
+      // Verify tamper detection tag
+      if (item.tag && item.iv) {
+        const expectedTag = await this.computeTag(item.value, item.namespace || 'default', item.iv)
+        if (expectedTag !== item.tag) {
+          console.warn('Storage tampering detected, clearing item')
+          this.removeItem(key)
+          return null
+        }
       }
 
       // Decrypt if encrypted

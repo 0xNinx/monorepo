@@ -23,8 +23,6 @@ interface NpmAuditVulnerability {
     source?: number;
     name?: string;
     dependency?: string;
-    title?: string;
-    url?: string;
     severity?: string;
     cwe?: string[];
     cvss?: {

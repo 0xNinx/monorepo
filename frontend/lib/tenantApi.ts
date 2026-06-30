@@ -124,6 +124,7 @@ export interface QuickPayRequest {
   dealId: string;
   amount: number;
   paymentMethod: "wallet" | "card";
+  idempotencyKey?: string;
 }
 
 export interface QuickPayResponse {

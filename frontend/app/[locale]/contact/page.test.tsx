@@ -1,7 +1,10 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import React from 'react'
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import ContactPage from './page'
+import { NextIntlClientProvider } from 'next-intl'
+import enMessages from '@/messages/en.json'
 
 // Mock the API module
 vi.mock('@/lib/api/support', () => ({
@@ -12,13 +15,21 @@ import { submitSupportMessage } from '@/lib/api/support'
 
 type MockSubmitSupportMessage = Mock<typeof submitSupportMessage>
 
+const renderWithTranslations = (ui: React.ReactNode) => {
+  return render(
+    <NextIntlClientProvider locale="en" messages={enMessages}>
+      {ui}
+    </NextIntlClientProvider>
+  )
+}
+
 describe('ContactPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
   })
 
   it('renders the contact form', () => {
-    render(<ContactPage />)
+    renderWithTranslations(<ContactPage />)
 
     expect(screen.getByText('Get in Touch')).toBeInTheDocument()
     expect(screen.getByLabelText('Name')).toBeInTheDocument()
@@ -33,7 +44,7 @@ describe('ContactPage', () => {
     const mockSubmit = submitSupportMessage as MockSubmitSupportMessage
     mockSubmit.mockResolvedValue({ success: true, messageId: 'msg-123' })
 
-    render(<ContactPage />)
+    renderWithTranslations(<ContactPage />)
 
     // Fill form
     await userEvent.type(screen.getByLabelText('Name'), 'John Doe')
@@ -75,7 +86,7 @@ describe('ContactPage', () => {
       () => new Promise((resolve) => setTimeout(() => resolve({ success: true, messageId: 'msg-123' }), 100))
     )
 
-    render(<ContactPage />)
+    renderWithTranslations(<ContactPage />)
 
     // Fill form
     await userEvent.type(screen.getByLabelText('Name'), 'John Doe')
@@ -99,7 +110,7 @@ describe('ContactPage', () => {
     const mockSubmit = submitSupportMessage as MockSubmitSupportMessage
     mockSubmit.mockRejectedValue(mockError)
 
-    render(<ContactPage />)
+    renderWithTranslations(<ContactPage />)
 
     // Fill form
     await userEvent.type(screen.getByLabelText('Name'), 'John Doe')
@@ -130,7 +141,7 @@ describe('ContactPage', () => {
     const mockSubmit = submitSupportMessage as MockSubmitSupportMessage
     mockSubmit.mockRejectedValue(mockError)
 
-    render(<ContactPage />)
+    renderWithTranslations(<ContactPage />)
 
     // Fill form
     await userEvent.type(screen.getByLabelText('Name'), 'John Doe')
@@ -166,7 +177,7 @@ describe('ContactPage', () => {
     const mockSubmit = submitSupportMessage as MockSubmitSupportMessage
     mockSubmit.mockRejectedValue(mockError)
 
-    render(<ContactPage />)
+    renderWithTranslations(<ContactPage />)
 
     // Fill and submit to trigger error
     await userEvent.type(screen.getByLabelText('Name'), 'John Doe')
@@ -195,7 +206,7 @@ describe('ContactPage', () => {
       .mockRejectedValueOnce(new Error('Server error'))
       .mockResolvedValueOnce({ success: true, messageId: 'msg-123' })
 
-    render(<ContactPage />)
+    renderWithTranslations(<ContactPage />)
 
     // Fill form
     await userEvent.type(screen.getByLabelText('Name'), 'John Doe')
@@ -220,7 +231,7 @@ describe('ContactPage', () => {
   })
 
   it('requires all required fields for HTML5 validation', () => {
-    render(<ContactPage />)
+    renderWithTranslations(<ContactPage />)
 
     const nameInput = screen.getByLabelText('Name')
     const emailInput = screen.getByLabelText('Email')
@@ -234,7 +245,7 @@ describe('ContactPage', () => {
   })
 
   it('phone field is optional', () => {
-    render(<ContactPage />)
+    renderWithTranslations(<ContactPage />)
 
     const phoneInput = screen.getByLabelText('Phone (Optional)')
     expect(phoneInput).not.toBeRequired()
@@ -245,7 +256,7 @@ describe('ContactPage', () => {
     const mockSubmit = submitSupportMessage as MockSubmitSupportMessage
     mockSubmit.mockRejectedValue(mockError)
 
-    render(<ContactPage />)
+    renderWithTranslations(<ContactPage />)
 
     // Fill form
     await userEvent.type(screen.getByLabelText('Name'), 'John Doe')

@@ -1,8 +1,7 @@
 import { useCallback, useSyncExternalStore, useState } from 'react'
+import { consentManager } from '@/lib/consent-manager'
 
 export const POLICY_VERSION = '1.0'
-
-const STORAGE_KEY = 'shelterflex_cookie_consent'
 
 export interface ConsentCategories {
   analytics: boolean
@@ -16,57 +15,25 @@ export interface ConsentRecord {
   categories: ConsentCategories
 }
 
-function readStoredConsent(): ConsentRecord | null {
-  if (typeof window === 'undefined') return null
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    if (!raw) return null
-    return JSON.parse(raw) as ConsentRecord
-  } catch {
-    return null
-  }
-}
-
-function writeConsent(record: ConsentRecord): void {
-  if (typeof window === 'undefined') return
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(record))
-  } catch {
-    // Storage unavailable — fail silently
-  }
-}
-
-function buildRecord(categories: ConsentCategories): ConsentRecord {
-  return {
-    version: POLICY_VERSION,
-    timestamp: new Date().toISOString(),
-    categories,
-  }
-}
-
-// Module-level singleton store so same-tab writes are reflected without storage events
-type Listener = () => void
-const _listeners = new Set<Listener>()
-let _snapshot: ConsentRecord | null = null
-let _initialized = false
-
-function _subscribe(listener: Listener): () => void {
-  _listeners.add(listener)
-  return () => _listeners.delete(listener)
+function _subscribe(listener: () => void): () => void {
+  return consentManager.onConsentChange(listener)
 }
 
 function _getClientSnapshot(): ConsentRecord | null {
-  if (!_initialized) {
-    _initialized = true
-    _snapshot = readStoredConsent()
+  const preferences = consentManager.getPreferences()
+  // If preferences have not been initialized/saved yet, return null so banner shows
+  if (preferences.timestamp === 0) {
+    return null
   }
-  return _snapshot
-}
-
-function _setSnapshot(record: ConsentRecord | null): void {
-  _snapshot = record
-  _initialized = true
-  _listeners.forEach((l) => l())
+  return {
+    version: preferences.version,
+    timestamp: new Date(preferences.timestamp).toISOString(),
+    categories: {
+      analytics: preferences.analytics,
+      marketing: preferences.marketing,
+      functional: preferences.functional,
+    }
+  }
 }
 
 const _getServerSnapshot = (): ConsentRecord | null => null
@@ -104,40 +71,27 @@ export function useCookieConsent(): UseCookieConsentReturn {
   )
 
   const acceptAll = useCallback(() => {
-    const record = buildRecord({
-      analytics: true,
-      marketing: true,
-      functional: true,
-    })
-    writeConsent(record)
-    _setSnapshot(record)
+    consentManager.consentAll()
     setIsPreferencesOpen(false)
   }, [])
 
   const rejectNonEssential = useCallback(() => {
-    const record = buildRecord({
-      analytics: false,
-      marketing: false,
-      functional: false,
-    })
-    writeConsent(record)
-    _setSnapshot(record)
+    consentManager.rejectAll()
     setIsPreferencesOpen(false)
   }, [])
 
   const updateConsent = useCallback(
     (categories: Partial<ConsentCategories>) => {
-      const current = consent?.categories ?? {
-        analytics: false,
-        marketing: false,
-        functional: false,
-      }
-      const record = buildRecord({ ...current, ...categories })
-      writeConsent(record)
-      _setSnapshot(record)
+      const current = consentManager.getPreferences()
+      consentManager.updatePreferences({
+        analytics: categories.analytics ?? current.analytics,
+        performance: categories.analytics ?? current.analytics, // Sync performance with analytics
+        marketing: categories.marketing ?? current.marketing,
+        functional: categories.functional ?? current.functional,
+      })
       setIsPreferencesOpen(false)
     },
-    [consent],
+    [],
   )
 
   const openPreferences = useCallback(() => {

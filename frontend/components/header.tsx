@@ -9,6 +9,7 @@ import { MobileMenu } from "@/components/ui/mobile-menu"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { CurrencyToggle } from "@/components/currency-toggle"
 import { ConnectWalletButton } from "@/components/wallet/ConnectWalletButton"
+import { LanguageSwitcher } from "@/components/language-switcher"
 import { NotificationBell } from "@/components/layout/NotificationBell"
 
 const navLinks = [
@@ -56,6 +57,7 @@ export function Header() {
 
           {/* Desktop Actions */}
           <div className="hidden lg:flex items-center gap-3">
+            <LanguageSwitcher />
             <CurrencyToggle />
             <ThemeToggle />
             <NotificationBell />
@@ -66,13 +68,13 @@ export function Header() {
             <Link href="/login">
               <Button
                 variant="outline"
-                className="border-3 border-foreground font-bold shadow-[4px_4px_0px_0px_rgba(26,26,26,1)] hover:shadow-[2px_2px_0px_0px_rgba(26,26,26,1)] hover:translate-x-0.5 hover:translate-y-0.5 transition-all bg-background text-foreground min-h-[44px] px-4 sm:px-6"
+                className="border-3 border-foreground font-bold shadow-[4px_4px_0px_0px_rgba(26,26,26,1)] hover:shadow-[2px_2px_0px_0px_rgba(26,26,26,1)] hover:translate-x-0.5 rtl:hover:-translate-x-0.5 hover:translate-y-0.5 transition-all bg-background text-foreground min-h-[44px] px-4 sm:px-6"
               >
                 Log In
               </Button>
             </Link>
             <Link href="/signup">
-              <Button className="border-3 border-foreground bg-primary font-bold shadow-[4px_4px_0px_0px_rgba(26,26,26,1)] hover:shadow-[2px_2px_0px_0px_rgba(26,26,26,1)] hover:translate-x-0.5 hover:translate-y-0.5 transition-all text-foreground min-h-[44px] px-4 sm:px-6">
+              <Button className="border-3 border-foreground bg-primary font-bold shadow-[4px_4px_0px_0px_rgba(26,26,26,1)] hover:shadow-[2px_2px_0px_0px_rgba(26,26,26,1)] hover:translate-x-0.5 rtl:hover:-translate-x-0.5 hover:translate-y-0.5 transition-all text-foreground min-h-[44px] px-4 sm:px-6">
                 Get Started
               </Button>
             </Link>

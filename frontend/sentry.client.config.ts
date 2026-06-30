@@ -1,4 +1,21 @@
+/**
+ * Sentry Client Configuration
+ * 
+ * Classification: Strictly Necessary (Always-On)
+ * 
+ * Rationale under GDPR/NDPR:
+ * Sentry error reporting is classified as "Strictly Necessary" / "Essential" because it is
+ * required to monitor the stability, performance, diagnostics, and security of the Shelterflex platform.
+ * It is not used for behavioural tracking, user profiling, or marketing purposes.
+ * 
+ * Privacy Compliance:
+ * To ensure user privacy remains uncompromised, we aggressively scrub all Personally Identifiable Information (PII)
+ * such as authorization headers, session cookies, passwords, email addresses, phone numbers, and IP addresses
+ * in the `beforeSend` hook before transmission.
+ */
+
 import * as Sentry from "@sentry/nextjs"
+import { scrubEvent, scrubBreadcrumb } from "./lib/pii-scrubber"
 
 Sentry.init({
   dsn: process.env.NEXT_PUBLIC_SENTRY_DSN,
@@ -25,29 +42,9 @@ Sentry.init({
     }
     
     // Scrub PII from event data
-    if (event.request) {
-      delete event.request.cookies
-      if (event.request.headers) {
-        delete event.request.headers["authorization"]
-        delete event.request.headers["cookie"]
-      }
-    }
-    
-    // Scrub PII from user data
-    if (event.user) {
-      delete event.user.email
-      delete event.user.phone
-      delete event.user.ip_address
-    }
-    
-    // Scrub PII from extra data
-    if (event.extra) {
-      const extra = event.extra
-      delete extra.email
-      delete extra.phone
-      delete extra.password
-    }
-    
-    return event
+    return scrubEvent(event)
+  },
+  beforeBreadcrumb(breadcrumb) {
+    return scrubBreadcrumb(breadcrumb)
   },
 })

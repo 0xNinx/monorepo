@@ -19,20 +19,35 @@ export function PaymentTimeline({
   hasMore,
   isLoading,
 }: PaymentTimelineProps) {
+  // Announce the most recent payment's status to assistive tech so live updates
+  // (e.g. a payment moving to "Processing"/"Paid") are conveyed without sight.
+  const latest = payments[0];
+
   return (
     <div className="space-y-6">
-      {payments.map((payment) => (
-        <PaymentTimelineNode
-          key={payment.id}
-          date={payment.transactionDate}
-          amount={payment.amount}
-          status={payment.status}
-          reference={payment.reference}
-          isOverdue={payment.isOverdue}
-          daysOverdue={payment.daysOverdue}
-          onDownloadReceipt={() => onDownloadReceipt(payment.reference)}
-        />
-      ))}
+      <p role="status" aria-live="polite" aria-atomic="true" className="sr-only">
+        {latest
+          ? `Showing ${payments.length} payment${payments.length === 1 ? "" : "s"}. Most recent payment is ${latest.status}.`
+          : ""}
+      </p>
+
+      {payments.length > 0 && (
+        <ol className="space-y-6" aria-label="Payment history timeline">
+          {payments.map((payment) => (
+            <li key={payment.id}>
+              <PaymentTimelineNode
+                date={payment.transactionDate}
+                amount={payment.amount}
+                status={payment.status}
+                reference={payment.reference}
+                isOverdue={payment.isOverdue}
+                daysOverdue={payment.daysOverdue}
+                onDownloadReceipt={() => onDownloadReceipt(payment.reference)}
+              />
+            </li>
+          ))}
+        </ol>
+      )}
 
       {payments.length === 0 && (
         <div className="rounded-3xl border-2 border-dashed border-foreground/20 bg-muted p-10 text-center text-muted-foreground">

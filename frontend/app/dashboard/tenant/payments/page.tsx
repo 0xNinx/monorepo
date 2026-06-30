@@ -1,10 +1,8 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import Link from "next/link"
 import {
   Calendar,
-  Clock,
   AlertCircle,
   Wallet,
   Loader2,
@@ -25,9 +23,12 @@ import { showErrorToast, showSuccessToast } from "@/lib/toast"
 import { usePaymentHistory } from "@/hooks/usePaymentHistory"
 import { PaymentTimeline } from "@/components/payment/PaymentTimeline"
 import { UpcomingScheduleTable } from "@/components/payment/UpcomingScheduleTable"
+import { formatNgn } from "@/lib/currency"
+
+type ActiveTab = "schedule" | "history"
 
 export default function TenantPaymentsPage() {
-  const [activeTab, setActiveTab] = useState<"schedule" | "history">("schedule")
+  const [activeTab, setActiveTab] = useState<ActiveTab>("schedule")
   const [walletBalance, setWalletBalance] = useState(0)
   const [paymentSchedule, setPaymentSchedule] = useState<PaymentScheduleItem[]>([])
   const [nextPayment, setNextPayment] = useState<PaymentScheduleItem | null>(null)
@@ -35,6 +36,8 @@ export default function TenantPaymentsPage() {
   const [selectedDeal, setSelectedDeal] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [isProcessing, setIsProcessing] = useState(false)
+  const [submittingPeriod, setSubmittingPeriod] = useState<number | null>(null)
+  const [optimisticStatuses, setOptimisticStatuses] = useState<Record<number, "pending" | "failed">>({})
 
   const {
     payments,
@@ -46,17 +49,8 @@ export default function TenantPaymentsPage() {
     limit: 10,
   })
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat("en-NG", {
-      style: "currency",
-      currency: "NGN",
-      minimumFractionDigits: 0,
-    }).format(amount)
-  }
-
   const loadData = async () => {
     setIsLoading(true)
-
     try {
       const [scheduleRes, walletRes] = await Promise.all([
         getPaymentSchedule(),
@@ -91,13 +85,23 @@ export default function TenantPaymentsPage() {
       showErrorToast("No active payment found")
       return
     }
+    if (submittingPeriod !== null) return
 
+    const period = nextPayment.period
+    const idempotencyKey = typeof crypto !== "undefined" && crypto.randomUUID
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random()}`
+
+    setSubmittingPeriod(period)
     setIsProcessing(true)
+    setOptimisticStatuses((prev) => ({ ...prev, [period]: "pending" }))
+
     try {
       const response = await initiateQuickPay({
         dealId: selectedDeal,
         amount: nextPayment.amount,
         paymentMethod: method,
+        idempotencyKey,
       })
 
       if (response.success) {
@@ -105,13 +109,27 @@ export default function TenantPaymentsPage() {
           window.location.href = response.data.redirectUrl
         } else {
           showSuccessToast(response.data.message)
+          setOptimisticStatuses((prev) => {
+            const next = { ...prev }
+            delete next[period]
+            return next
+          })
           await loadData()
         }
       }
     } catch (error: any) {
+      setOptimisticStatuses((prev) => ({ ...prev, [period]: "failed" }))
       showErrorToast(error?.message || "Payment failed")
+      setTimeout(() => {
+        setOptimisticStatuses((prev) => {
+          const next = { ...prev }
+          delete next[period]
+          return next
+        })
+      }, 5000)
     } finally {
       setIsProcessing(false)
+      setSubmittingPeriod(null)
     }
   }
 
@@ -124,8 +142,12 @@ export default function TenantPaymentsPage() {
       <div className="min-h-screen bg-background">
         <DashboardHeader />
         <main className="ml-64 min-h-screen pt-20 flex items-center justify-center">
-          <div className="flex flex-col items-center gap-4 rounded-3xl border-3 border-foreground bg-card p-10 shadow-[4px_4px_0px_0px_rgba(26,26,26,1)]">
-            <Loader2 className="h-10 w-10 animate-spin text-foreground" />
+          <div
+            aria-live="polite"
+            aria-busy="true"
+            className="flex flex-col items-center gap-4 rounded-3xl border-3 border-foreground bg-card p-10 shadow-[4px_4px_0px_0px_rgba(26,26,26,1)]"
+          >
+            <Loader2 className="h-10 w-10 animate-spin text-foreground" aria-hidden="true" />
             <p className="text-sm font-bold text-foreground">Loading payment details...</p>
           </div>
         </main>
@@ -142,10 +164,8 @@ export default function TenantPaymentsPage() {
         userInfo={{ name: "Ngozi Adekunle", roleLabel: "Tenant" }}
       />
 
-      {/* Main Content */}
       <main className="lg:ml-64 min-h-screen pt-20">
         <div className="p-8">
-          {/* Header */}
           <div className="mb-8">
             <h1 className="text-3xl font-bold text-foreground">Payments</h1>
             <p className="mt-1 text-muted-foreground">Manage your rent payments and wallet</p>
@@ -155,34 +175,47 @@ export default function TenantPaymentsPage() {
           <div className="mb-8 grid grid-cols-3 gap-4">
             <Card className="border-3 border-foreground p-4 shadow-[4px_4px_0px_0px_rgba(26,26,26,1)]">
               <div className="flex items-center gap-3">
-                <div className="flex h-12 w-12 items-center justify-center border-3 border-foreground bg-primary">
+                <div
+                  className="flex h-12 w-12 items-center justify-center border-3 border-foreground bg-primary"
+                  aria-hidden="true"
+                >
                   <Wallet className="h-6 w-6" />
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Wallet Balance</p>
-                  <p className="text-xl font-bold">{formatCurrency(walletBalance)}</p>
+                  <p className="text-xl font-bold">{formatNgn(walletBalance)}</p>
                 </div>
               </div>
             </Card>
             <Card className="border-3 border-foreground p-4 shadow-[4px_4px_0px_0px_rgba(26,26,26,1)]">
               <div className="flex items-center gap-3">
-                <div className="flex h-12 w-12 items-center justify-center border-3 border-foreground bg-secondary">
+                <div
+                  className="flex h-12 w-12 items-center justify-center border-3 border-foreground bg-secondary"
+                  aria-hidden="true"
+                >
                   <AlertCircle className="h-6 w-6" />
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Next Payment</p>
-                  <p className="text-xl font-bold">{nextPayment ? formatCurrency(nextPayment.amount) : "N/A"}</p>
+                  <p className="text-xl font-bold">
+                    {nextPayment ? formatNgn(nextPayment.amount) : "N/A"}
+                  </p>
                 </div>
               </div>
             </Card>
             <Card className="border-3 border-foreground p-4 shadow-[4px_4px_0px_0px_rgba(26,26,26,1)]">
               <div className="flex items-center gap-3">
-                <div className="flex h-12 w-12 items-center justify-center border-3 border-foreground bg-accent">
+                <div
+                  className="flex h-12 w-12 items-center justify-center border-3 border-foreground bg-accent"
+                  aria-hidden="true"
+                >
                   <Calendar className="h-6 w-6" />
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Due Date</p>
-                  <p className="text-xl font-bold">{nextPayment ? nextPayment.dueDate : "N/A"}</p>
+                  <p className="text-xl font-bold">
+                    {nextPayment ? nextPayment.dueDate : "N/A"}
+                  </p>
                 </div>
               </div>
             </Card>
@@ -190,14 +223,24 @@ export default function TenantPaymentsPage() {
 
           {/* Tabs */}
           <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div className="flex flex-wrap gap-4">
-              {[
-                { id: "schedule", label: "Schedule" },
-                { id: "history", label: "History" },
-              ].map((tab) => (
+            <div
+              role="tablist"
+              aria-label="Payment sections"
+              className="flex flex-wrap gap-4"
+            >
+              {(
+                [
+                  { id: "schedule", label: "Schedule" },
+                  { id: "history", label: "History" },
+                ] as { id: ActiveTab; label: string }[]
+              ).map((tab) => (
                 <button
                   key={tab.id}
-                  onClick={() => setActiveTab(tab.id as typeof activeTab)}
+                  role="tab"
+                  id={`tab-${tab.id}`}
+                  aria-selected={activeTab === tab.id}
+                  aria-controls={`panel-${tab.id}`}
+                  onClick={() => setActiveTab(tab.id)}
                   className={`border-3 border-foreground px-6 py-3 font-bold transition-all ${
                     activeTab === tab.id
                       ? "bg-foreground text-background shadow-[4px_4px_0px_0px_rgba(26,26,26,1)]"
@@ -230,53 +273,72 @@ export default function TenantPaymentsPage() {
             ) : null}
           </div>
 
-          {/* Schedule Tab */}
-          {activeTab === "schedule" && (
-            <div className="space-y-6">
-              <Card className="border-3 border-foreground p-6 shadow-[4px_4px_0px_0px_rgba(26,26,26,1)]">
-                <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                  <div>
-                    <h3 className="text-lg font-bold">Payment Schedule</h3>
-                    <p className="mt-2 text-sm text-muted-foreground">
-                      Track upcoming installments and pay the next due item from one place.
-                    </p>
-                  </div>
-                  {nextPayment ? (
-                    <div className="rounded-3xl border-2 border-foreground/20 bg-muted p-4">
-                      <p className="text-sm text-muted-foreground">Next due installment</p>
-                      <p className="text-2xl font-bold">{formatCurrency(nextPayment.amount)}</p>
-                      <p className="text-sm text-muted-foreground">Due {nextPayment.dueDate}</p>
-                    </div>
-                  ) : null}
+          {/* Schedule Tab Panel */}
+          <div
+            role="tabpanel"
+            id="panel-schedule"
+            aria-labelledby="tab-schedule"
+            tabIndex={0}
+            hidden={activeTab !== "schedule"}
+            className="space-y-6"
+          >
+            <Card className="border-3 border-foreground p-6 shadow-[4px_4px_0px_0px_rgba(26,26,26,1)]">
+              <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                <div>
+                  <h3 className="text-lg font-bold">Payment Schedule</h3>
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    Track upcoming installments and pay the next due item from one place.
+                  </p>
                 </div>
-
-                {paymentSchedule.length === 0 ? (
-                  <div className="flex flex-col items-center py-12 text-center">
-                    <Calendar className="h-16 w-16 text-muted-foreground" />
-                    <h3 className="mt-4 font-bold">No upcoming installments</h3>
-                    <p className="mt-2 text-sm text-muted-foreground">
-                      Your future repayment schedule will appear here when available.
-                    </p>
+                {nextPayment ? (
+                  <div className="rounded-3xl border-2 border-foreground/20 bg-muted p-4">
+                    <p className="text-sm text-muted-foreground">Next due installment</p>
+                    <p className="text-2xl font-bold">{formatNgn(nextPayment.amount)}</p>
+                    <p className="text-sm text-muted-foreground">Due {nextPayment.dueDate}</p>
                   </div>
-                ) : (
-                  <UpcomingScheduleTable
-                    schedule={paymentSchedule.map((payment) => ({
-                      period: payment.period,
-                      month: payment.month,
-                      amount: payment.amount,
-                      dueDate: payment.dueDate,
-                      status: payment.status,
-                      isNextDue: payment.isNextDue,
-                    }))}
-                    onPayNow={() => handleQuickPay("card")}
-                  />
-                )}
-              </Card>
-            </div>
-          )}
+                ) : null}
+              </div>
 
-          {/* Payment History Tab */}
-          {activeTab === "history" && (
+              {paymentSchedule.length === 0 ? (
+                <div className="flex flex-col items-center py-12 text-center">
+                  <Calendar className="h-16 w-16 text-muted-foreground" aria-hidden="true" />
+                  <h3 className="mt-4 font-bold">No upcoming installments</h3>
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    Your future repayment schedule will appear here when available.
+                  </p>
+                </div>
+              ) : (
+                <UpcomingScheduleTable
+                  schedule={paymentSchedule.map((payment) => ({
+                    period: payment.period,
+                    month: payment.month,
+                    amount: payment.amount,
+                    dueDate: payment.dueDate,
+                    status: payment.status,
+                    isNextDue: payment.isNextDue,
+                  }))}
+                  onPayNow={() => handleQuickPay("card")}
+                  optimisticStatuses={optimisticStatuses}
+                />
+              )}
+
+              {isProcessing && (
+                <div aria-live="polite" className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                  Processing payment…
+                </div>
+              )}
+            </Card>
+          </div>
+
+          {/* History Tab Panel */}
+          <div
+            role="tabpanel"
+            id="panel-history"
+            aria-labelledby="tab-history"
+            tabIndex={0}
+            hidden={activeTab !== "history"}
+          >
             <Card className="border-3 border-foreground p-6 shadow-[4px_4px_0px_0px_rgba(26,26,26,1)]">
               <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                 <div>
@@ -298,8 +360,7 @@ export default function TenantPaymentsPage() {
                 isLoading={isHistoryLoading}
               />
             </Card>
-          )}
-
+          </div>
         </div>
       </main>
     </div>

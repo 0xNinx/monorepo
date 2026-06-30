@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import Link from "next/link";
 import {
   ArrowLeft,
@@ -19,6 +19,9 @@ import {
   MessageSquareOff,
   MessageCircle,
   Lock,
+  AlertCircle,
+  Loader2,
+  RefreshCw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -31,8 +34,16 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { conversations, messageThreads } from "@/lib/mockData";
 import useAuthStore from "@/store/useAuthStore";
+import { sanitizeText } from "@/lib/sanitize";
 
-type Message = (typeof messageThreads)[number][number];
+type Message = {
+  id: number;
+  senderId: "me" | "other";
+  text: string;
+  timestamp: string;
+  status: "sending" | "sent" | "delivered" | "read" | "failed";
+  attachment?: { type: "image" | "document"; name: string };
+};
 
 export default function MessagesPage() {
   const { isAuthenticated } = useAuthStore();
@@ -51,9 +62,8 @@ export default function MessagesPage() {
 
   const [messages, setMessages] = useState<Message[]>(messageThreads[1] ?? []);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-
-  // Check if messaging feature is enabled (stub - always false for now)
-  const isMessagingEnabled = true;
+  const [isSending, setIsSending] = useState(false);
+  const [isLoadingThread, setIsLoadingThread] = useState(false);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -63,28 +73,85 @@ export default function MessagesPage() {
     scrollToBottom();
   }, [messages]);
 
-  const handleSelectConversation = (id: number) => {
+  const handleSelectConversation = useCallback((id: number) => {
     setSelectedConversationId(id);
-    setMessages(messageThreads[id] || []);
-  };
+    setIsLoadingThread(true);
+    setMessages([]);
+    setTimeout(() => {
+      setMessages(messageThreads[id] || []);
+      setIsLoadingThread(false);
+    }, 300);
+  }, []);
 
-  const handleSendMessage = () => {
-    if (!newMessage.trim()) return;
+  const simulateSend = useCallback(async (text: string): Promise<boolean> => {
+    await new Promise((r) => setTimeout(r, 800));
+    if (Math.random() > 0.15) return true;
+    throw new Error("Send failed");
+  }, []);
 
-    const newMsg: Message = {
-      id: messages.length + 1,
+  const handleSendMessage = useCallback(async () => {
+    const text = sanitizeText(newMessage).trim();
+    if (!text || isSending) return;
+
+    const optimisticMsg: Message = {
+      id: Date.now(),
       senderId: "me",
-      text: newMessage,
+      text,
       timestamp: new Date().toLocaleTimeString([], {
         hour: "2-digit",
         minute: "2-digit",
       }),
-      status: "sent",
+      status: "sending",
     };
 
-    setMessages([...messages, newMsg]);
+    setMessages((prev) => [...prev, optimisticMsg]);
     setNewMessage("");
-  };
+    setIsSending(true);
+
+    try {
+      await simulateSend(text);
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === optimisticMsg.id ? { ...m, status: "sent" } : m,
+        ),
+      );
+    } catch {
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === optimisticMsg.id ? { ...m, status: "failed" } : m,
+        ),
+      );
+    } finally {
+      setIsSending(false);
+    }
+  }, [newMessage, isSending, simulateSend]);
+
+  const handleRetry = useCallback(async (failedMsg: Message) => {
+    if (isSending) return;
+    setMessages((prev) =>
+      prev.map((m) =>
+        m.id === failedMsg.id ? { ...m, status: "sending" } : m,
+      ),
+    );
+    setIsSending(true);
+
+    try {
+      await simulateSend(failedMsg.text);
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === failedMsg.id ? { ...m, status: "sent" } : m,
+        ),
+      );
+    } catch {
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === failedMsg.id ? { ...m, status: "failed" } : m,
+        ),
+      );
+    } finally {
+      setIsSending(false);
+    }
+  }, [isSending, simulateSend]);
 
   const filteredConversations = conversations.filter(
     (conv) =>
@@ -302,7 +369,12 @@ export default function MessagesPage() {
           </div>
 
           {/* Messages */}
-          <div className="flex-1 overflow-y-auto bg-muted/30 p-6">
+          <div
+            className="flex-1 overflow-y-auto bg-muted/30 p-6"
+            role="log"
+            aria-live="polite"
+            aria-label="Message thread"
+          >
             <div className="mx-auto max-w-3xl space-y-4">
               {/* Property Context Card */}
               <Card className="mx-auto mb-6 max-w-md border-3 border-foreground p-4 shadow-[4px_4px_0px_0px_rgba(26,26,26,1)]">
@@ -328,52 +400,89 @@ export default function MessagesPage() {
                 </div>
               </Card>
 
-              {messages.map((message) => (
-                <div
-                  key={message.id}
-                  className={`flex ${message.senderId === "me" ? "justify-end" : "justify-start"}`}
-                >
+              {isLoadingThread ? (
+                <div className="flex justify-center py-12">
+                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                </div>
+              ) : messages.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-12 text-center">
+                  <MessageCircle className="h-12 w-12 text-muted-foreground" />
+                  <p className="mt-4 font-bold">No messages yet</p>
+                  <p className="text-sm text-muted-foreground">
+                    Send a message to start the conversation.
+                  </p>
+                </div>
+              ) : (
+                messages.map((message) => (
                   <div
-                    className={`max-w-md border-3 border-foreground p-4 ${
-                      message.senderId === "me"
-                        ? "bg-primary shadow-[4px_4px_0px_0px_rgba(26,26,26,1)]"
-                        : "bg-card shadow-[4px_4px_0px_0px_rgba(26,26,26,1)]"
-                    }`}
+                    key={message.id}
+                    className={`flex ${message.senderId === "me" ? "justify-end" : "justify-start"}`}
+                    aria-label={`Message from ${message.senderId === "me" ? "you" : "other"}: ${sanitizeText(message.text).slice(0, 50)}`}
                   >
-                    <p className="text-sm">{message.text}</p>
-                    {message.attachment && (
-                      <div className="mt-2 flex items-center gap-2 border-2 border-foreground bg-muted/50 p-2">
-                        {message.attachment.type === "image" ? (
-                          <ImageIcon className="h-4 w-4" />
-                        ) : (
-                          <File className="h-4 w-4" />
-                        )}
-                        <span className="text-xs">
-                          {message.attachment.name}
+                    <div
+                      className={`max-w-md border-3 border-foreground p-4 ${
+                        message.senderId === "me"
+                          ? "bg-primary shadow-[4px_4px_0px_0px_rgba(26,26,26,1)]"
+                          : "bg-card shadow-[4px_4px_0px_0px_rgba(26,26,26,1)]"
+                      }`}
+                    >
+                      <p className="text-sm break-words">
+                        {sanitizeText(message.text)}
+                      </p>
+                      {message.attachment && (
+                        <div className="mt-2 flex items-center gap-2 border-2 border-foreground bg-muted/50 p-2">
+                          {message.attachment.type === "image" ? (
+                            <ImageIcon className="h-4 w-4" />
+                          ) : (
+                            <File className="h-4 w-4" />
+                          )}
+                          <span className="text-xs">
+                            {message.attachment.name}
+                          </span>
+                        </div>
+                      )}
+                      <div className="mt-2 flex items-center justify-end gap-1">
+                        <span className="text-xs text-muted-foreground">
+                          {message.timestamp}
                         </span>
+                        {message.senderId === "me" && (
+                          <>
+                            {message.status === "sending" && (
+                              <Clock className="h-3 w-3 text-muted-foreground animate-pulse" />
+                            )}
+                            {message.status === "sent" && (
+                              <Clock className="h-3 w-3 text-muted-foreground" />
+                            )}
+                            {message.status === "delivered" && (
+                              <CheckCheck className="h-3 w-3 text-muted-foreground" />
+                            )}
+                            {message.status === "read" && (
+                              <CheckCheck className="h-3 w-3 text-secondary" />
+                            )}
+                            {message.status === "failed" && (
+                              <AlertCircle className="h-3 w-3 text-destructive" />
+                            )}
+                          </>
+                        )}
                       </div>
-                    )}
-                    <div className="mt-2 flex items-center justify-end gap-1">
-                      <span className="text-xs text-muted-foreground">
-                        {message.timestamp}
-                      </span>
-                      {message.senderId === "me" && (
-                        <>
-                          {message.status === "read" && (
-                            <CheckCheck className="h-3 w-3 text-secondary" />
-                          )}
-                          {message.status === "delivered" && (
-                            <CheckCheck className="h-3 w-3 text-muted-foreground" />
-                          )}
-                          {message.status === "sent" && (
-                            <Clock className="h-3 w-3 text-muted-foreground" />
-                          )}
-                        </>
+                      {message.status === "failed" && message.senderId === "me" && (
+                        <div className="mt-2 flex justify-end">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleRetry(message)}
+                            disabled={isSending}
+                            className="border-2 border-destructive text-destructive text-xs font-bold"
+                          >
+                            <RefreshCw className="mr-1 h-3 w-3" />
+                            Retry
+                          </Button>
+                        </div>
                       )}
                     </div>
                   </div>
-                </div>
-              ))}
+                ))
+              )}
               <div ref={messagesEndRef} />
             </div>
           </div>
@@ -392,15 +501,26 @@ export default function MessagesPage() {
                 placeholder="Type your message..."
                 value={newMessage}
                 onChange={(e) => setNewMessage(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleSendMessage()}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSendMessage();
+                  }
+                }}
+                disabled={isSending}
                 className="flex-1 border-3 border-foreground py-4 shadow-[4px_4px_0px_0px_rgba(26,26,26,1)] md:py-6"
               />
               <Button
                 onClick={handleSendMessage}
-                disabled={!newMessage.trim()}
+                disabled={!newMessage.trim() || isSending}
+                aria-label={isSending ? "Sending message" : "Send message"}
                 className="border-3 border-foreground bg-primary px-4 font-bold shadow-[4px_4px_0px_0px_rgba(26,26,26,1)] transition-all hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-[2px_2px_0px_0px_rgba(26,26,26,1)] disabled:opacity-50 md:px-6"
               >
-                <Send className="h-5 w-5" />
+                {isSending ? (
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                ) : (
+                  <Send className="h-5 w-5" />
+                )}
               </Button>
             </div>
           </div>

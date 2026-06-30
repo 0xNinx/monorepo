@@ -17,6 +17,8 @@ import { CookieConsentProvider } from '@/contexts/CookieConsentContext'
 import { CookieConsentBanner } from '@/components/CookieConsentBanner'
 import { Geist, Geist_Mono } from 'next/font/google'
 import './globals.css'
+import { NextIntlClientProvider } from "next-intl"
+import enMessages from "../messages/en.json"
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
@@ -45,7 +47,7 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html suppressHydrationWarning>
       <head>
         <meta name="theme-color" content="#ff6b35" />
       </head>
@@ -56,27 +58,29 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          <FeatureFlagProvider>
-          <CurrencyProvider>
-            <WalletProvider>
-            <CookieConsentProvider>
-            <ErrorBoundary>
-              <ServiceWorkerRegister />
-              <SpeedInsights />
-              <PerformanceMonitor />
-              <NetworkStatusBanner />
-              <SkipLink />
-              <Header />
-              <div id="main-content" />
-              {children}
-              <Footer />
-              <Toaster />
-              <CookieConsentBanner />
-            </ErrorBoundary>
-            </CookieConsentProvider>
-            </WalletProvider>
-          </CurrencyProvider>
-          </FeatureFlagProvider>
+          <NextIntlClientProvider locale="en" messages={enMessages}>
+            <FeatureFlagProvider>
+            <CurrencyProvider>
+              <WalletProvider>
+              <CookieConsentProvider>
+              <ErrorBoundary>
+                <ServiceWorkerRegister />
+                <SpeedInsights />
+                <PerformanceMonitor />
+                <NetworkStatusBanner />
+                <SkipLink />
+                <Header />
+                <div id="main-content" />
+                {children}
+                <Footer />
+                <Toaster />
+                <CookieConsentBanner />
+              </ErrorBoundary>
+              </CookieConsentProvider>
+              </WalletProvider>
+            </CurrencyProvider>
+            </FeatureFlagProvider>
+          </NextIntlClientProvider>
         </ThemeProvider>
       </body>
     </html>

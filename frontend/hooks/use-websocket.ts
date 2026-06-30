@@ -16,9 +16,12 @@ export interface WebSocketConfig {
   fallbackPollInterval?: number
 }
 
+export type ConnectionStatus = 'live' | 'reconnecting' | 'stale' | 'disconnected'
+
 export interface WebSocketResult {
   isConnected: boolean
   isConnecting: boolean
+  connectionStatus: ConnectionStatus
   error: Error | null
   lastMessage: WebSocketMessage | null
   reconnectAttempts: number
@@ -35,6 +38,12 @@ const DEFAULT_CONFIG: Required<Omit<WebSocketConfig, 'url'>> = {
   fallbackPollInterval: 5000,
 }
 
+function calculateBackoffDelay(attempt: number, baseDelay: number, maxDelay: number = 30000): number {
+  const exponential = baseDelay * Math.pow(2, attempt)
+  const withJitter = exponential * (0.5 + Math.random() * 0.5)
+  return Math.min(withJitter, maxDelay)
+}
+
 export function useWebSocket(config: WebSocketConfig): WebSocketResult {
   const mergedConfig = useMemo(() => ({ ...DEFAULT_CONFIG, ...config }), [config])
 
@@ -43,6 +52,13 @@ export function useWebSocket(config: WebSocketConfig): WebSocketResult {
   const [error, setError] = useState<Error | null>(null)
   const [lastMessage, setLastMessage] = useState<WebSocketMessage | null>(null)
   const [reconnectAttempts, setReconnectAttempts] = useState(0)
+
+  const connectionStatus = useMemo<ConnectionStatus>(() => {
+    if (isConnected) return 'live'
+    if (isConnecting || reconnectAttempts > 0) return 'reconnecting'
+    if (lastMessage) return 'stale'
+    return 'disconnected'
+  }, [isConnected, isConnecting, reconnectAttempts, lastMessage])
 
   const wsRef = useRef<WebSocket | null>(null)
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null)
@@ -138,9 +154,10 @@ export function useWebSocket(config: WebSocketConfig): WebSocketResult {
             return previous
           }
 
+          const delay = calculateBackoffDelay(nextAttempt - 1, configRef.current.reconnectInterval)
           reconnectTimeoutRef.current = setTimeout(() => {
             connectRef.current?.()
-          }, configRef.current.reconnectInterval)
+          }, delay)
 
           return nextAttempt
         })
@@ -218,6 +235,7 @@ export function useWebSocket(config: WebSocketConfig): WebSocketResult {
   return {
     isConnected,
     isConnecting,
+    connectionStatus,
     error,
     lastMessage,
     reconnectAttempts,

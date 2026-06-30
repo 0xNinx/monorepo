@@ -28,7 +28,7 @@ import { DashboardSidebar } from "@/components/dashboard/DashboardSidebar";
 
 export default function PropertyApplicationsPage() {
   const params = useParams();
-  const propertyId = params.propertyId as string;
+  const propertyId = params.id as string;
 
   const [property, setProperty] = useState<LandlordPropertyRecord | null>(null);
   const [applications, setApplications] = useState<LandlordApplicationRecord[]>([]);
