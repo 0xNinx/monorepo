@@ -12,7 +12,7 @@ import {
   inspectionChecklistTemplate,
   type ChecklistCategory,
 } from "./InspectionChecklist";
-import { submitReport } from "@/lib/inspectorApi";
+import { propertyInspectionApi, type ChecklistItem } from "@/lib/propertyInspectionApi";
 
 interface ReportSubmitFormProps {
   jobId: string;
@@ -72,27 +72,28 @@ export function ReportSubmitForm({ jobId, propertyTitle, onSubmitted, onError }:
 
     try {
       const notes = [summary, recommendations].filter(Boolean).join("\n\n");
-      const photoKeys = photos.map((f) => f.name);
+      
+      // Convert checklist to the new format
+      const checklistItems: ChecklistItem[] = [];
+      checklist.forEach((cat) => {
+        cat.items.forEach((item) => {
+          checklistItems.push({
+            category: cat.category as 'structural' | 'plumbing' | 'electrical' | 'safety' | 'exterior',
+            item: item.label,
+            result: item.completed ? 'pass' : 'fail',
+            notes: item.notes || undefined,
+          });
+        });
+      });
 
-      await submitReport(jobId, {
-        overallGrade: CONDITION_MAP[overallCondition] || "B",
-        roomChecklist: checklist.reduce(
-          (acc, cat) => {
-            acc[cat.id] = {
-              category: cat.category,
-              items: cat.items.map((item) => ({
-                id: item.id,
-                label: item.label,
-                completed: item.completed,
-                notes: item.notes,
-              })),
-            };
-            return acc;
-          },
-          {} as Record<string, unknown>,
-        ),
-        photoKeys,
-        notes,
+      // For now, use placeholder URLs for photos
+      // In production, these would be uploaded to S3/cloud storage
+      const photoUrls = photos.map((f) => `https://placeholder.url/${f.name}`);
+
+      await propertyInspectionApi.submitReport(jobId, {
+        checklistItems,
+        photos: photoUrls.map((url) => ({ url })),
+        inspectorNotes: notes,
       });
 
       onSubmitted?.();

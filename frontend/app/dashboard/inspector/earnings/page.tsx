@@ -16,21 +16,21 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { DashboardHeader } from "@/components/dashboard-header";
 import { DashboardSidebar } from "@/components/dashboard/DashboardSidebar";
-import { getInspectorJobs, type InspectorJob } from "@/lib/inspectorApi";
+import { propertyInspectionApi, type InspectorEarnings } from "@/lib/propertyInspectionApi";
 import { useFeatureFlag } from "@/lib/featureFlags";
 
 export default function EarningsPage() {
   const isEnabled = useFeatureFlag("INSPECTOR_DASHBOARD_ENABLED");
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [jobs, setJobs] = useState<InspectorJob[]>([]);
+  const [earnings, setEarnings] = useState<InspectorEarnings | null>(null);
 
-  const fetchJobs = useCallback(async () => {
+  const fetchEarnings = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     try {
-      const data = await getInspectorJobs();
-      setJobs(data);
+      const data = await propertyInspectionApi.getEarnings();
+      setEarnings(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load earnings");
     } finally {
@@ -39,31 +39,12 @@ export default function EarningsPage() {
   }, []);
 
   useEffect(() => {
-    fetchJobs();
-  }, [fetchJobs]);
+    fetchEarnings();
+  }, [fetchEarnings]);
 
-  const completedJobs = jobs.filter(
-    (j) => j.status === "completed",
-  );
-  const earnings = completedJobs.map((j, idx) => ({
-    id: `earn-${idx}`,
-    jobId: j.id,
-    propertyTitle: j.propertyTitle,
-    address: j.address,
-    inspectionType: j.inspectionType,
-    fee: j.offeredFee,
-    status: "paid",
-    completedAt: j.completedAt || j.createdAt,
-    paidAt: undefined,
-  }));
-
-  const totalEarned = earnings.reduce((sum, e) => sum + e.fee, 0);
-  const paidAmount = earnings
-    .filter((e) => e.status === "paid")
-    .reduce((sum, e) => sum + e.fee, 0);
-  const pendingAmount = earnings
-    .filter((e) => e.status === "pending")
-    .reduce((sum, e) => sum + e.fee, 0);
+  const totalEarned = earnings?.totalEarnings || 0;
+  const paidAmount = totalEarned; // Assuming all approved inspections are paid
+  const pendingAmount = 0;
 
   if (!isEnabled) {
     return (
@@ -110,7 +91,7 @@ export default function EarningsPage() {
             <Card className="mb-8 border-3 border-foreground p-6 text-center shadow-[4px_4px_0px_0px_rgba(26,26,26,1)]">
               <p className="text-destructive">{error}</p>
               <Button
-                onClick={fetchJobs}
+                onClick={fetchEarnings}
                 className="mt-4 border-3 border-foreground bg-primary shadow-[2px_2px_0px_0px_rgba(26,26,26,1)]"
               >
                 <RefreshCw className="mr-2 h-4 w-4" />
@@ -190,7 +171,7 @@ export default function EarningsPage() {
                   <Skeleton key={i} className="h-24 border-3 border-foreground" />
                 ))}
               </div>
-            ) : earnings.length === 0 ? (
+            ) : !earnings || earnings.inspections.length === 0 ? (
               <div className="py-12 text-center">
                 <DollarSign className="mx-auto h-16 w-16 text-muted-foreground" />
                 <h3 className="mt-4 text-xl font-bold text-foreground">
@@ -202,26 +183,21 @@ export default function EarningsPage() {
               </div>
             ) : (
               <div className="space-y-4">
-                {earnings.map((earning) => (
+                {earnings.inspections.map((inspection) => (
                   <div
-                    key={earning.id}
+                    key={inspection.id}
                     className="flex items-center justify-between rounded-lg border-2 border-foreground bg-card p-4"
                   >
                     <div className="flex-1">
                       <h4 className="font-bold text-foreground">
-                        {earning.propertyTitle}
+                        Inspection #{inspection.id.slice(0, 8)}
                       </h4>
                       <p className="text-sm text-muted-foreground">
-                        {earning.address}
+                        Listing ID: {inspection.listingId}
                       </p>
                       <div className="mt-2 flex items-center gap-4 text-sm">
                         <span className="text-muted-foreground">
-                          {earning.inspectionType === "new_listing"
-                            ? "New Listing"
-                            : "Re-Inspection"}
-                        </span>
-                        <span className="text-muted-foreground">
-                          Completed: {new Date(earning.completedAt).toLocaleDateString()}
+                          Completed: {new Date(inspection.completedAt).toLocaleDateString()}
                         </span>
                       </div>
                     </div>
@@ -229,16 +205,10 @@ export default function EarningsPage() {
                     <div className="flex items-center gap-4">
                       <div className="text-right">
                         <p className="text-lg font-bold text-foreground">
-                          ₦{earning.fee.toLocaleString()}
+                          ₦{inspection.fee.toLocaleString()}
                         </p>
-                        <Badge
-                          className={`border-2 border-foreground ${
-                            earning.status === "paid"
-                              ? "bg-green-500"
-                              : "bg-accent"
-                          }`}
-                        >
-                          {earning.status === "paid" ? "Paid" : "Pending"}
+                        <Badge className="border-2 border-foreground bg-green-500">
+                          Paid
                         </Badge>
                       </div>
                     </div>
