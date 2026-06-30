@@ -5,10 +5,10 @@ import { MapPin, Clock, DollarSign, FileText, CheckCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import type { InspectorJob } from "@/lib/inspectorApi";
+import type { InspectionJob } from "@/lib/propertyInspectionApi";
 
 interface JobCardProps {
-  job: InspectorJob;
+  job: InspectionJob;
   onClaim?: (jobId: string) => void;
   isClaiming?: boolean;
 }
@@ -71,10 +71,10 @@ export function JobCard({ job, onClaim, isClaiming }: JobCardProps) {
 
         {/* Property Info */}
         <div>
-          <h3 className="text-lg font-bold text-foreground">{job.propertyTitle}</h3>
+          <h3 className="text-lg font-bold text-foreground">{job.propertyTitle || 'Property Inspection'}</h3>
           <p className="mt-1 flex items-center gap-1 text-sm text-muted-foreground">
             <MapPin className="h-4 w-4" />
-            {job.address}
+            {job.address || 'Location not specified'}
           </p>
         </div>
 
@@ -82,11 +82,11 @@ export function JobCard({ job, onClaim, isClaiming }: JobCardProps) {
         <div className="flex gap-6 text-sm">
           <div className="flex items-center gap-1 font-medium text-foreground">
             <DollarSign className="h-4 w-4 text-primary" />
-            ₦{job.offeredFee.toLocaleString()}
+            ₦{(job.offeredFee || 0).toLocaleString()}
           </div>
           <div className="flex items-center gap-1 text-muted-foreground">
             <Clock className="h-4 w-4" />
-            Due: {new Date(job.deadline).toLocaleDateString()}
+            Due: {job.deadline ? new Date(job.deadline).toLocaleDateString() : 'TBD'}
           </div>
         </div>
 

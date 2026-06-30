@@ -64,6 +64,7 @@ import { TrustIndicatorBar } from "@/components/properties/TrustIndicatorBar";
 import { InspectionReportAccordion } from "@/components/properties/InspectionReportAccordion";
 import { LandlordSnippet } from "@/components/properties/LandlordSnippet";
 import useAuthStore from "@/store/useAuthStore";
+import { propertyInspectionApi, type InspectionSummary } from "@/lib/propertyInspectionApi";
 
 const properties = allProperties;
 
@@ -117,6 +118,8 @@ export default function PropertyDetailClient({
   const [reportDetails, setReportDetails] = useState("");
   const [reportSubmitted, setReportSubmitted] = useState(false);
   const [isSubmittingReport, setIsSubmittingReport] = useState(false);
+  const [inspectionSummary, setInspectionSummary] = useState<InspectionSummary | null>(null);
+  const [isLoadingInspection, setIsLoadingInspection] = useState(false);
   const lightboxRef = useRef<HTMLDivElement>(null);
   const mainGalleryRef = useRef<HTMLDivElement>(null);
 
@@ -172,6 +175,24 @@ export default function PropertyDetailClient({
       lightboxRef.current.focus();
     }
   }, [showLightbox]);
+
+  // Fetch inspection summary
+  useEffect(() => {
+    const fetchInspectionSummary = async () => {
+      setIsLoadingInspection(true);
+      try {
+        const summary = await propertyInspectionApi.getInspectionSummary(propertyId);
+        setInspectionSummary(summary);
+      } catch (error) {
+        // Property may not have an inspection, which is fine
+        setInspectionSummary(null);
+      } finally {
+        setIsLoadingInspection(false);
+      }
+    };
+
+    fetchInspectionSummary();
+  }, [propertyId]);
 
   const property = properties.find((p) => p.id === Number.parseInt(propertyId));
 
@@ -486,14 +507,10 @@ export default function PropertyDetailClient({
               {/* Trust Indicators Bar */}
               <TrustIndicatorBar
                 landlordKyc={property.landlord?.verified ?? false}
-                inspectionPass={
-                  (property as any).inspectionReport
-                    ? {
-                        date: (property as any).inspectionReport.date,
-                        inspectorName: (property as any).inspectionReport.inspectorName,
-                      }
-                    : null
-                }
+                inspectionPass={inspectionSummary ? {
+                  date: inspectionSummary.approvedAt,
+                  inspectorName: `Inspector #${inspectionSummary.inspectionId.slice(0, 8)}`,
+                } : null}
                 whistleblowerCleared={!!property.whistleblower}
                 verificationStatus={(property as any).verificationStatus}
               />
@@ -541,10 +558,10 @@ export default function PropertyDetailClient({
 
               {/* Inspection Report Accordion */}
               <InspectionReportAccordion 
-                report={(property as any).inspectionReport ? {
-                  overallGrade: (property as any).inspectionReport.overallGrade,
-                  roomConditions: (property as any).inspectionReport.roomConditions,
-                  photos: (property as any).inspectionReport.photos || (property.images.length > 2 ? [property.images[0].url, property.images[1].url].filter(Boolean) as string[] : [])
+                report={inspectionSummary ? {
+                  overallGrade: inspectionSummary.passCount > inspectionSummary.failCount ? 'A' : inspectionSummary.passCount === inspectionSummary.failCount ? 'B' : 'C',
+                  roomConditions: inspectionSummary.categoryResults,
+                  photos: property.images.slice(0, 3).map(img => img.url).filter(Boolean) as string[]
                 } : null}
               />
 

@@ -15,13 +15,13 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { DashboardHeader } from "@/components/dashboard-header";
 import { DashboardSidebar } from "@/components/dashboard/DashboardSidebar";
 import { JobCard } from "@/components/inspector/JobCard";
-import { getInspectorJobs, claimJob, type InspectorJob } from "@/lib/inspectorApi";
+import { propertyInspectionApi, type InspectionJob } from "@/lib/propertyInspectionApi";
 import { useFeatureFlag } from "@/lib/featureFlags";
 
 export default function InspectorDashboard() {
   const isEnabled = useFeatureFlag("INSPECTOR_DASHBOARD_ENABLED");
   const [isLoading, setIsLoading] = useState(true);
-  const [jobs, setJobs] = useState<InspectorJob[]>([]);
+  const [jobs, setJobs] = useState<InspectionJob[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [claimingId, setClaimingId] = useState<string | null>(null);
   const [filter, setFilter] = useState<"all" | "available" | "in_progress" | "completed">(
@@ -32,7 +32,7 @@ export default function InspectorDashboard() {
     setIsLoading(true);
     setError(null);
     try {
-      const data = await getInspectorJobs();
+      const data = await propertyInspectionApi.getAvailableJobs();
       setJobs(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load jobs");
@@ -57,7 +57,7 @@ export default function InspectorDashboard() {
   const handleClaimJob = async (jobId: string) => {
     setClaimingId(jobId);
     try {
-      const claimed = await claimJob(jobId);
+      const claimed = await propertyInspectionApi.acceptJob(jobId);
       setJobs((prev) =>
         prev.map((j) => (j.id === jobId ? claimed : j)),
       );
@@ -75,7 +75,7 @@ export default function InspectorDashboard() {
   const completedCount = jobs.filter((j) => j.status === "completed").length;
   const totalEarnings = jobs
     .filter((j) => j.status === "completed")
-    .reduce((sum, j) => sum + j.offeredFee, 0);
+    .reduce((sum, j) => sum + (j.offeredFee || 0), 0);
 
   const stats = [
     { label: "Available Jobs", value: String(availableCount), icon: Building2, color: "bg-primary" },
