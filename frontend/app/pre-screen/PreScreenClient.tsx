@@ -1,13 +1,15 @@
 "use client"
 
-import { useState, useMemo, useEffect } from "react"
-import { useSearchParams } from "next/navigation"
-import { ArrowLeft, ArrowRight, Check } from "lucide-react"
+import { useState, useMemo, useEffect, useRef } from "react"
+import { useSearchParams, useRouter, usePathname } from "next/navigation"
+import { ArrowLeft, ArrowRight, Check, AlertCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { EligibilityResultCard } from "@/components/prescreener/EligibilityResultCard"
 import { calculateAffordability, type EmploymentStatus, type EligibilityBand } from "@/lib/affordabilityCalc"
 import { useDraftPersist } from "@/hooks/useDraftPersist"
+import { useAppForm } from "@/hooks/useAppForm"
+import { preScreenSchema, type PreScreenFormValues } from "@/lib/formSchemas"
 
 const EMPLOYMENT_OPTIONS: { value: EmploymentStatus; label: string }[] = [
   { value: "employed", label: "Employed (Full-time)" },
@@ -23,33 +25,76 @@ const EMPLOYMENT_LABELS: Record<EmploymentStatus, string> = {
   student: "Low",
 }
 
+const TOTAL_STEPS = 3
+
 interface PreScreenDraft {
   step: number
-  monthlyNetIncome: string
-  monthlyRent: string
-  employmentStatus: EmploymentStatus | null
-  depositPercentage: number
+  formData: PreScreenFormValues
 }
 
 const DRAFT_KEY = "prescreen_draft"
 
 export function PreScreenClient() {
   const searchParams = useSearchParams()
+  const router = useRouter()
+  const pathname = usePathname()
   const listingPrice = searchParams.get("listingPrice")
-
-  const [step, setStep] = useState(1)
-  const [monthlyNetIncome, setMonthlyNetIncome] = useState("")
-  const [monthlyRent, setMonthlyRent] = useState("")
-  const [employmentStatus, setEmploymentStatus] = useState<EmploymentStatus | null>(null)
-  const [depositPercentage, setDepositPercentage] = useState(10)
+  const stepParam = searchParams.get("step")
+  
+  const initialStep = stepParam ? parseInt(stepParam, 10) : 1
+  const [step, setStep] = useState(initialStep)
   const [result, setResult] = useState<{
     band: EligibilityBand
     incomePass: boolean
     depositPass: boolean
   } | null>(null)
   const [showResumePrompt, setShowResumePrompt] = useState(false)
+  const [stepChangeAnnouncement, setStepChangeAnnouncement] = useState("")
+  const previousStepRef = useRef(step)
 
   const { save, load, clear } = useDraftPersist<PreScreenDraft>(DRAFT_KEY)
+
+  // Initialize form with default values
+  const defaultValues: PreScreenFormValues = {
+    monthlyNetIncome: "",
+    monthlyRent: listingPrice ? String(parseFloat(listingPrice) / 12) : "",
+    employmentStatus: null as EmploymentStatus | null,
+    depositPercentage: 10,
+  }
+
+  const form = useAppForm<PreScreenFormValues>({
+    schema: preScreenSchema,
+    draftKey: DRAFT_KEY,
+    defaultValues: defaultValues as any,
+  })
+
+  const { watch, setValue, trigger, formState: { errors }, clearErrors } = form
+
+  const formData = watch()
+
+  // Sync step with URL
+  useEffect(() => {
+    const params = new URLSearchParams(searchParams.toString())
+    if (step <= TOTAL_STEPS) {
+      params.set("step", step.toString())
+    } else {
+      params.delete("step")
+    }
+    const newUrl = `${pathname}?${params.toString()}`
+    if (newUrl !== `${pathname}?${searchParams.toString()}`) {
+      router.replace(newUrl)
+    }
+  }, [step, searchParams, pathname, router])
+
+  // Announce step changes to screen readers
+  useEffect(() => {
+    if (step !== previousStepRef.current) {
+      setStepChangeAnnouncement(`Step ${step} of ${TOTAL_STEPS}`)
+      previousStepRef.current = step
+      // Clear announcement after it's been read
+      setTimeout(() => setStepChangeAnnouncement(""), 1000)
+    }
+  }, [step])
 
   // Load draft on mount and offer resume
   useEffect(() => {
@@ -62,10 +107,9 @@ export function PreScreenClient() {
 
   const applyDraft = (draft: PreScreenDraft) => {
     setStep(draft.step)
-    setMonthlyNetIncome(draft.monthlyNetIncome)
-    setMonthlyRent(draft.monthlyRent || (listingPrice ? String(parseFloat(listingPrice) / 12) : ""))
-    setEmploymentStatus(draft.employmentStatus)
-    setDepositPercentage(draft.depositPercentage)
+    Object.entries(draft.formData).forEach(([key, value]) => {
+      setValue(key as keyof PreScreenFormValues, value as any)
+    })
   }
 
   const handleResume = () => {
@@ -76,41 +120,89 @@ export function PreScreenClient() {
 
   const handleStartOver = () => {
     clear()
+    clearErrors()
+    form.reset(defaultValues)
     setShowResumePrompt(false)
+    setStep(1)
   }
 
-  const saveDraft = (patch: Partial<PreScreenDraft>) => {
+  const saveDraft = () => {
     const current: PreScreenDraft = {
       step,
-      monthlyNetIncome,
-      monthlyRent,
-      employmentStatus,
-      depositPercentage,
-      ...patch,
+      formData,
     }
     save(current)
   }
 
+  // Auto-save draft on form changes
+  useEffect(() => {
+    saveDraft()
+  }, [formData, step]) // eslint-disable-line react-hooks/exhaustive-deps
+
   const parsedRent = useMemo(
-    () => parseFloat(monthlyRent) || (listingPrice ? parseFloat(listingPrice) / 12 : 0),
-    [monthlyRent, listingPrice],
+    () => parseFloat(formData.monthlyRent) || (listingPrice ? parseFloat(listingPrice) / 12 : 0),
+    [formData.monthlyRent, listingPrice],
   )
-  const parsedIncome = useMemo(() => parseFloat(monthlyNetIncome) || 0, [monthlyNetIncome])
+  const parsedIncome = useMemo(() => parseFloat(formData.monthlyNetIncome) || 0, [formData.monthlyNetIncome])
 
   const incomePass =
     parsedIncome > 0 && parsedRent > 0 ? parsedRent / parsedIncome <= 0.4 : null
 
-  const handleSubmit = () => {
-    if (!employmentStatus) return
+  const validateStep = async (currentStep: number) => {
+    let isValid = false
+    
+    switch (currentStep) {
+      case 1:
+        isValid = await trigger(["monthlyNetIncome", "monthlyRent"])
+        if (!isValid) {
+          // Focus first error field
+          if (errors.monthlyNetIncome) {
+            document.getElementById("income")?.focus()
+          } else if (errors.monthlyRent) {
+            document.getElementById("rent")?.focus()
+          }
+        }
+        break
+      case 2:
+        isValid = await trigger("employmentStatus")
+        if (!isValid) {
+          document.getElementById("employment-status")?.focus()
+        }
+        break
+      case 3:
+        isValid = await trigger("depositPercentage")
+        break
+    }
+    
+    return isValid
+  }
+
+  const handleNext = async () => {
+    const isValid = await validateStep(step)
+    if (isValid) {
+      setStep((prev) => Math.min(prev + 1, TOTAL_STEPS))
+    }
+  }
+
+  const handleBack = () => {
+    setStep((prev) => Math.max(prev - 1, 1))
+  }
+
+  const handleSubmit = async () => {
+    const isValid = await validateStep(step)
+    if (!isValid || !formData.employmentStatus) return
+    
     const calc = calculateAffordability({
       monthlyNetIncome: parsedIncome,
       monthlyRent: parsedRent,
-      employmentStatus,
-      depositPercentage,
+      employmentStatus: formData.employmentStatus,
+      depositPercentage: formData.depositPercentage,
       minDepositRequired: 20,
     })
     setResult({ band: calc.overallBand, incomePass: calc.incomePass, depositPass: calc.depositPass })
     clear()
+    clearErrors()
+    form.reset(defaultValues)
     setStep(4)
   }
 
@@ -152,15 +244,13 @@ export function PreScreenClient() {
           <EligibilityResultCard
             band={result.band}
             incomePass={result.incomePass}
-            employmentLabel={employmentStatus ? EMPLOYMENT_LABELS[employmentStatus] : ""}
+            employmentLabel={formData.employmentStatus ? EMPLOYMENT_LABELS[formData.employmentStatus] : ""}
             depositPass={result.depositPass}
             onReset={() => {
               setStep(1)
               setResult(null)
-              setMonthlyNetIncome("")
-              setMonthlyRent("")
-              setEmploymentStatus(null)
-              setDepositPercentage(10)
+              clearErrors()
+              form.reset(defaultValues)
             }}
           />
         </div>
@@ -179,21 +269,36 @@ export function PreScreenClient() {
         </div>
 
         {/* Step indicator */}
-        <div className="flex items-center gap-2 mb-8" aria-label="Progress" role="group">
-          {[1, 2, 3].map((s) => (
-            <div key={s} className="flex items-center gap-2">
-              <div
-                className={`h-8 w-8 border-2 border-foreground flex items-center justify-center text-sm font-bold ${
-                  step > s ? "bg-primary" : step === s ? "bg-card" : "bg-muted"
-                }`}
-                aria-current={step === s ? "step" : undefined}
-                aria-label={`Step ${s}${step > s ? " (completed)" : step === s ? " (current)" : ""}`}
-              >
-                {step > s ? <Check className="h-4 w-4" aria-hidden="true" /> : s}
-              </div>
-              {s < 3 && <div className={`h-0.5 w-8 ${step > s ? "bg-primary" : "bg-muted"}`} aria-hidden="true" />}
+        <div className="mb-8">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-sm font-bold text-muted-foreground">
+              Step {step} of {TOTAL_STEPS}
+            </h2>
+            <div className="text-sm font-bold text-muted-foreground">
+              {Math.round((step / TOTAL_STEPS) * 100)}% complete
             </div>
-          ))}
+          </div>
+          <div className="flex items-center gap-2" aria-label="Progress" role="group">
+            {[1, 2, 3].map((s) => (
+              <div key={s} className="flex items-center gap-2">
+                <div
+                  className={`h-8 w-8 border-2 border-foreground flex items-center justify-center text-sm font-bold ${
+                    step > s ? "bg-primary" : step === s ? "bg-card" : "bg-muted"
+                  }`}
+                  aria-current={step === s ? "step" : undefined}
+                  aria-label={`Step ${s}${step > s ? " (completed)" : step === s ? " (current)" : ""}`}
+                  tabIndex={-1}
+                >
+                  {step > s ? <Check className="h-4 w-4" aria-hidden="true" /> : s}
+                </div>
+                {s < TOTAL_STEPS && <div className={`h-0.5 w-8 ${step > s ? "bg-primary" : "bg-muted"}`} aria-hidden="true" />}
+              </div>
+            ))}
+          </div>
+          {/* Screen reader announcement for step changes */}
+          <div aria-live="polite" aria-atomic="true" className="sr-only">
+            {stepChangeAnnouncement}
+          </div>
         </div>
 
         <Card className="border-3 border-foreground p-6 shadow-[4px_4px_0px_0px_rgba(26,26,26,1)]">
@@ -214,14 +319,20 @@ export function PreScreenClient() {
                     type="number"
                     min="0"
                     placeholder="e.g. 500000"
-                    value={monthlyNetIncome}
-                    onChange={(e) => {
-                      setMonthlyNetIncome(e.target.value)
-                      saveDraft({ monthlyNetIncome: e.target.value })
-                    }}
-                    className="w-full border-2 border-foreground bg-background px-3 py-2 text-sm"
-                    aria-describedby={incomePass !== null ? "income-feedback" : undefined}
+                    value={formData.monthlyNetIncome}
+                    onChange={(e) => setValue("monthlyNetIncome", e.target.value)}
+                    className={`w-full border-2 border-foreground bg-background px-3 py-2 text-sm ${
+                      errors.monthlyNetIncome ? "border-destructive" : ""
+                    }`}
+                    aria-describedby={errors.monthlyNetIncome ? "income-error" : incomePass !== null ? "income-feedback" : undefined}
+                    aria-invalid={!!errors.monthlyNetIncome}
                   />
+                  {errors.monthlyNetIncome && (
+                    <p id="income-error" className="text-sm text-destructive mt-1 flex items-center gap-1">
+                      <AlertCircle className="h-4 w-4" aria-hidden="true" />
+                      {errors.monthlyNetIncome.message}
+                    </p>
+                  )}
                 </div>
                 <div>
                   <label className="text-sm font-bold block mb-1" htmlFor="rent">
@@ -235,19 +346,27 @@ export function PreScreenClient() {
                     type="number"
                     min="0"
                     placeholder="e.g. 150000"
-                    value={monthlyRent}
-                    onChange={(e) => {
-                      setMonthlyRent(e.target.value)
-                      saveDraft({ monthlyRent: e.target.value })
-                    }}
-                    className="w-full border-2 border-foreground bg-background px-3 py-2 text-sm"
+                    value={formData.monthlyRent}
+                    onChange={(e) => setValue("monthlyRent", e.target.value)}
+                    className={`w-full border-2 border-foreground bg-background px-3 py-2 text-sm ${
+                      errors.monthlyRent ? "border-destructive" : ""
+                    }`}
+                    aria-describedby={errors.monthlyRent ? "rent-error" : undefined}
+                    aria-invalid={!!errors.monthlyRent}
                   />
+                  {errors.monthlyRent && (
+                    <p id="rent-error" className="text-sm text-destructive mt-1 flex items-center gap-1">
+                      <AlertCircle className="h-4 w-4" aria-hidden="true" />
+                      {errors.monthlyRent.message}
+                    </p>
+                  )}
                 </div>
 
                 {incomePass !== null && (
                   <div
                     id="income-feedback"
                     role="status"
+                    aria-live="polite"
                     className={`border-2 border-foreground p-3 ${incomePass ? "bg-green-50" : "bg-destructive/10"}`}
                   >
                     <p className={`text-sm font-bold ${incomePass ? "text-green-700" : "text-destructive"}`}>
@@ -264,16 +383,17 @@ export function PreScreenClient() {
 
               <div className="flex justify-end">
                 <Button
-                  onClick={() => {
-                    setStep(2)
-                    saveDraft({ step: 2 })
-                  }}
-                  disabled={!monthlyNetIncome || !monthlyRent}
+                  onClick={handleNext}
+                  disabled={!formData.monthlyNetIncome || !formData.monthlyRent}
                   className="border-3 border-foreground bg-primary font-bold shadow-[4px_4px_0px_0px_rgba(26,26,26,1)] hover:shadow-[2px_2px_0px_0px_rgba(26,26,26,1)] transition-all disabled:opacity-50"
+                  aria-describedby="step-1-next-help"
                 >
                   Next
                   <ArrowRight className="ml-2 h-4 w-4" aria-hidden="true" />
                 </Button>
+                <span id="step-1-next-help" className="sr-only">
+                  Proceeds to employment status step after validating income and rent fields
+                </span>
               </div>
             </div>
           )}
@@ -285,18 +405,16 @@ export function PreScreenClient() {
                 <p className="text-sm text-muted-foreground mt-1">Select your current employment situation.</p>
               </div>
 
-              <div className="space-y-2" role="radiogroup" aria-label="Employment status">
+              <div className="space-y-2" role="radiogroup" aria-label="Employment status" aria-required="true">
                 {EMPLOYMENT_OPTIONS.map((opt) => (
                   <button
                     key={opt.value}
+                    type="button"
                     role="radio"
-                    aria-checked={employmentStatus === opt.value}
-                    onClick={() => {
-                      setEmploymentStatus(opt.value)
-                      saveDraft({ employmentStatus: opt.value })
-                    }}
-                    className={`w-full text-left border-2 border-foreground p-3 text-sm font-medium transition-all ${
-                      employmentStatus === opt.value
+                    aria-checked={formData.employmentStatus === opt.value}
+                    onClick={() => setValue("employmentStatus", opt.value)}
+                    className={`w-full text-left border-2 border-foreground p-3 text-sm font-medium transition-all focus:outline-none focus:ring-2 focus:ring-foreground focus:ring-offset-2 ${
+                      formData.employmentStatus === opt.value
                         ? "bg-primary shadow-[2px_2px_0px_0px_rgba(26,26,26,1)]"
                         : "bg-card hover:bg-muted"
                     }`}
@@ -305,11 +423,17 @@ export function PreScreenClient() {
                   </button>
                 ))}
               </div>
+              {errors.employmentStatus && (
+                <p id="employment-error" className="text-sm text-destructive flex items-center gap-1">
+                  <AlertCircle className="h-4 w-4" aria-hidden="true" />
+                  {errors.employmentStatus.message}
+                </p>
+              )}
 
-              {employmentStatus && (
+              {formData.employmentStatus && (
                 <div className="border-2 border-foreground p-3 bg-muted" aria-live="polite">
                   <p className="text-sm">
-                    Likelihood band: <span className="font-bold">{EMPLOYMENT_LABELS[employmentStatus]}</span>
+                    Likelihood band: <span className="font-bold">{EMPLOYMENT_LABELS[formData.employmentStatus]}</span>
                   </p>
                 </div>
               )}
@@ -317,21 +441,15 @@ export function PreScreenClient() {
               <div className="flex justify-between">
                 <Button
                   variant="outline"
-                  onClick={() => {
-                    setStep(1)
-                    saveDraft({ step: 1 })
-                  }}
+                  onClick={handleBack}
                   className="border-3 border-foreground font-bold shadow-[4px_4px_0px_0px_rgba(26,26,26,1)] hover:shadow-[2px_2px_0px_0px_rgba(26,26,26,1)] transition-all"
                 >
                   <ArrowLeft className="mr-2 h-4 w-4" aria-hidden="true" />
                   Back
                 </Button>
                 <Button
-                  onClick={() => {
-                    setStep(3)
-                    saveDraft({ step: 3 })
-                  }}
-                  disabled={!employmentStatus}
+                  onClick={handleNext}
+                  disabled={!formData.employmentStatus}
                   className="border-3 border-foreground bg-primary font-bold shadow-[4px_4px_0px_0px_rgba(26,26,26,1)] hover:shadow-[2px_2px_0px_0px_rgba(26,26,26,1)] transition-all disabled:opacity-50"
                 >
                   Next
@@ -351,24 +469,20 @@ export function PreScreenClient() {
               <div className="space-y-4">
                 <div>
                   <label className="text-sm font-bold block mb-1" htmlFor="deposit-range">
-                    Available Deposit: <span className="text-primary">{depositPercentage}%</span>
+                    Available Deposit: <span className="text-primary">{formData.depositPercentage}%</span>
                   </label>
                   <input
                     id="deposit-range"
                     type="range"
                     min="0"
                     max="100"
-                    value={depositPercentage}
-                    onChange={(e) => {
-                      const val = parseInt(e.target.value)
-                      setDepositPercentage(val)
-                      saveDraft({ depositPercentage: val })
-                    }}
+                    value={formData.depositPercentage}
+                    onChange={(e) => setValue("depositPercentage", parseInt(e.target.value, 10))}
                     aria-valuemin={0}
                     aria-valuemax={100}
-                    aria-valuenow={depositPercentage}
-                    aria-valuetext={`${depositPercentage}%`}
-                    className="w-full"
+                    aria-valuenow={formData.depositPercentage}
+                    aria-valuetext={`${formData.depositPercentage}%`}
+                    className="w-full focus:outline-none focus:ring-2 focus:ring-foreground focus:ring-offset-2"
                   />
                   <div className="flex justify-between text-xs text-muted-foreground mt-1" aria-hidden="true">
                     <span>0%</span>
@@ -376,14 +490,20 @@ export function PreScreenClient() {
                     <span>100%</span>
                   </div>
                 </div>
+                {errors.depositPercentage && (
+                  <p id="deposit-error" className="text-sm text-destructive flex items-center gap-1">
+                    <AlertCircle className="h-4 w-4" aria-hidden="true" />
+                    {errors.depositPercentage.message}
+                  </p>
+                )}
 
                 <div
                   role="status"
                   aria-live="polite"
-                  className={`border-2 border-foreground p-3 ${depositPercentage >= 20 ? "bg-green-50" : "bg-destructive/10"}`}
+                  className={`border-2 border-foreground p-3 ${formData.depositPercentage >= 20 ? "bg-green-50" : "bg-destructive/10"}`}
                 >
-                  <p className={`text-sm font-bold ${depositPercentage >= 20 ? "text-green-700" : "text-destructive"}`}>
-                    {depositPercentage >= 20
+                  <p className={`text-sm font-bold ${formData.depositPercentage >= 20 ? "text-green-700" : "text-destructive"}`}>
+                    {formData.depositPercentage >= 20
                       ? "Pass — Your deposit meets the minimum requirement."
                       : "Fail — Most listings require at least 20% deposit."}
                   </p>
@@ -393,10 +513,7 @@ export function PreScreenClient() {
               <div className="flex justify-between">
                 <Button
                   variant="outline"
-                  onClick={() => {
-                    setStep(2)
-                    saveDraft({ step: 2 })
-                  }}
+                  onClick={handleBack}
                   className="border-3 border-foreground font-bold shadow-[4px_4px_0px_0px_rgba(26,26,26,1)] hover:shadow-[2px_2px_0px_0px_rgba(26,26,26,1)] transition-all"
                 >
                   <ArrowLeft className="mr-2 h-4 w-4" aria-hidden="true" />

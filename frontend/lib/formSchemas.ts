@@ -14,7 +14,7 @@ export const emailSchema = z
 export const amountSchema = z
   .string()
   .min(1, "Amount is required")
-  .refine((v) => !isNaN(Number(v)) && Number(v) > 0, {
+  .refine((v: string) => !isNaN(Number(v)) && Number(v) > 0, {
     message: "Amount must be a positive number",
   });
 
@@ -74,6 +74,29 @@ export const contactSchema = z.object({
   message: z.string().min(10, "Message must be at least 10 characters"),
 });
 
+// ── Pre-Screening ──────────────────────────────────────────────────────────────
+
+export const employmentStatusSchema = z.enum(["employed", "self-employed", "contract", "student"], {
+  required_error: "Please select your employment status",
+});
+
+export const preScreenSchema = z.object({
+  monthlyNetIncome: z
+    .string()
+    .min(1, "Monthly net income is required")
+    .refine((v: string) => !isNaN(Number(v)) && Number(v) > 0, {
+      message: "Income must be a positive number",
+    }),
+  monthlyRent: z
+    .string()
+    .min(1, "Monthly rent is required")
+    .refine((v: string) => !isNaN(Number(v)) && Number(v) >= 0, {
+      message: "Rent must be a valid number",
+    }),
+  employmentStatus: employmentStatusSchema,
+  depositPercentage: z.number().min(0, "Deposit percentage must be at least 0").max(100, "Deposit percentage cannot exceed 100"),
+});
+
 // ── Type exports ──────────────────────────────────────────────────────────────
 
 export type LoginFormValues = z.infer<typeof loginSchema>;
@@ -83,3 +106,4 @@ export type StakeFormValues = z.infer<typeof stakeSchema>;
 export type DepositFormValues = z.infer<typeof depositSchema>;
 export type WhistleblowerFormValues = z.infer<typeof whistleblowerSchema>;
 export type ContactFormValues = z.infer<typeof contactSchema>;
+export type PreScreenFormValues = z.infer<typeof preScreenSchema>;
