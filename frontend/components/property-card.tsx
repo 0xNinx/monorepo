@@ -12,6 +12,7 @@ import {
 } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { useSearchParams, useRouter } from "next/navigation";
 import {
   Bath,
   Bed,
@@ -21,6 +22,7 @@ import {
   Home,
   MapPin,
   ShieldCheck,
+  Scale,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -29,6 +31,14 @@ import { LandlordVerificationBadge } from "@/components/LandlordVerificationBadg
 import { setListingSaved } from "@/lib/savedPropertiesApi";
 import { showErrorToast } from "@/lib/toast";
 import { formatNgn } from "@/lib/currency";
+import {
+  addToCompare,
+  removeFromCompare,
+  encodeCompareIds,
+  parseCompareIds,
+  MAX_COMPARE,
+  type AddResult,
+} from "@/lib/compare";
 
 export type PropertyCardPaymentType = "outright" | "installment";
 
@@ -65,6 +75,8 @@ export interface PropertyCardProps {
   /** Extra content below price row (landlord actions, etc.). */
   children?: ReactNode;
   className?: string;
+  /** Show compare button on the card */
+  showCompare?: boolean;
 }
 
 const DEFAULT_PLAN_MONTHS = 12;
@@ -271,9 +283,15 @@ export function PropertyCard({
   imageOverlay,
   children,
   className,
+  showCompare = false,
 }: PropertyCardProps) {
   const [favorited, setFavorited] = useState(isFavorited);
   const [favoritePending, setFavoritePending] = useState(false);
+  const searchParams = useSearchParams();
+  const router = useRouter();
+
+  const compareIds = parseCompareIds(searchParams.get("ids"));
+  const isComparing = compareIds.includes(property.listingId);
 
   useEffect(() => {
     setFavorited(isFavorited);
@@ -291,10 +309,10 @@ export function PropertyCard({
   const priceBlock = showBothPrices ? (
     <>
       <p className="text-xs text-muted-foreground">
-        {formatNgn(property.installmentBasePriceNgn)}/yr (installment)
+        {formatNgn(property.installmentBasePriceNgn ?? 0)}/yr (installment)
       </p>
       <p className="font-mono text-xl font-black">
-        {formatNgn(property.outrightPriceNgn)}{" "}
+        {formatNgn(property.outrightPriceNgn ?? 0)}{" "}
         <span className="text-xs font-medium text-muted-foreground">outright</span>
       </p>
     </>
@@ -346,6 +364,28 @@ export function PropertyCard({
     }
   };
 
+  const handleCompareClick = (event: MouseEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+
+    const result: AddResult = isComparing
+      ? { ids: removeFromCompare(compareIds, property.listingId), added: false }
+      : addToCompare(compareIds, property.listingId);
+
+    if (result.error === "full") {
+      showErrorToast(new Error(`You can compare up to ${MAX_COMPARE} properties`), "Compare limit reached");
+      return;
+    }
+
+    const newParams = new URLSearchParams(searchParams.toString());
+    if (result.ids.length > 0) {
+      newParams.set("ids", encodeCompareIds(result.ids));
+    } else {
+      newParams.delete("ids");
+    }
+    router.push(`/properties?${newParams.toString()}`);
+  };
+
   const favoriteButton = showFavorite ? (
     <button
       type="button"
@@ -367,16 +407,40 @@ export function PropertyCard({
     </button>
   ) : null;
 
-  const overlay =
-    imageOverlay ||
-    (property.landlordVerificationLevel ? (
-      <div className="absolute left-3 top-3 z-20">
-        <LandlordVerificationBadge
-          level={property.landlordVerificationLevel}
-          size="sm"
-        />
-      </div>
-    ) : null);
+  const overlay = (
+    <>
+      {property.landlordVerificationLevel && (
+        <div className="absolute left-3 top-3 z-20">
+          <LandlordVerificationBadge
+            level={property.landlordVerificationLevel}
+            size="sm"
+          />
+        </div>
+      )}
+      {showCompare && (
+        <button
+          type="button"
+          aria-label={
+            isComparing
+              ? `Remove from comparison: ${propertyName}`
+              : `Add to comparison: ${propertyName}`
+          }
+          aria-pressed={isComparing}
+          onClick={handleCompareClick}
+          className={cn(
+            "absolute right-3 top-3 z-20 flex h-10 w-10 items-center justify-center border-2 border-foreground bg-background transition-colors",
+            isComparing && "text-primary",
+          )}
+        >
+          <Scale
+            className={cn("h-5 w-5", isComparing && "fill-current")}
+            aria-hidden
+          />
+        </button>
+      )}
+      {imageOverlay}
+    </>
+  );
 
   const badges = (
     <div className="mb-2 flex flex-wrap items-center gap-2">
