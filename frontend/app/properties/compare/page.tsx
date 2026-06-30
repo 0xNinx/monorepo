@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, X, Scale } from "lucide-react";
@@ -33,7 +33,7 @@ interface PropertyWithAmenities extends PropertyListing {
   amenities: PropertyAmenity[];
 }
 
-export default function ComparePage() {
+function CompareContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const [properties, setProperties] = useState<PropertyWithAmenities[]>([]);
@@ -290,5 +290,17 @@ export default function ComparePage() {
         </div>
       </main>
     </div>
+  );
+}
+
+export default function ComparePage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <p className="font-mono font-bold text-muted-foreground">Loading comparison...</p>
+      </div>
+    }>
+      <CompareContent />
+    </Suspense>
   );
 }
