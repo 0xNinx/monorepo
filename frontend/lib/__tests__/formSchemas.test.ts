@@ -9,7 +9,7 @@ import {
   depositSchema,
   whistleblowerSchema,
   contactSchema,
-} from "@/lib/formSchemas";
+} from "../formSchemas";
 
 describe("formSchemas - emailSchema", () => {
   const validEmails = [
