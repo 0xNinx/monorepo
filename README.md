@@ -1,4 +1,4 @@
-# Shelterflex
+# Shelterflex 
 
 Shelterflex is a **Rent Now, Pay Later (RNPL)** platform that enables tenants to secure rental properties with an initial deposit and pay the remaining balance in monthly installments — while allowing landlords to list properties directly, reducing reliance on traditional agents.
 
