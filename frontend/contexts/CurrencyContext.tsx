@@ -1,6 +1,7 @@
 'use client'
 
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
+import { useLocale } from 'next-intl'
 import usePreferencesStore from '@/store/usePreferencesStore'
 import { formatByPreference, formatDual, type DisplayCurrency } from '@/lib/currency'
 
@@ -28,6 +29,7 @@ async function persistDisplayCurrency(currency: DisplayCurrency): Promise<void> 
 }
 
 export function CurrencyProvider({ children }: { children: React.ReactNode }) {
+  const locale = useLocale()
   const currency = usePreferencesStore((s) => s.currency) as DisplayCurrency
   const setPreference = usePreferencesStore((s) => s.setPreference)
   const [, setTick] = useState(0)
@@ -65,10 +67,10 @@ export function CurrencyProvider({ children }: { children: React.ReactNode }) {
     () => ({
       displayCurrency: currency === 'USDC' ? 'USDC' : 'NGN',
       setDisplayCurrency,
-      formatAmount: (ngn, usdc) => formatByPreference(ngn, usdc, currency === 'USDC' ? 'USDC' : 'NGN'),
-      formatDual,
+      formatAmount: (ngn, usdc) => formatByPreference(ngn, usdc, currency === 'USDC' ? 'USDC' : 'NGN', locale),
+      formatDual: (ngn, usdc) => formatDual(ngn, usdc, locale),
     }),
-    [currency, setDisplayCurrency],
+    [currency, locale, setDisplayCurrency],
   )
 
   return <CurrencyContext.Provider value={value}>{children}</CurrencyContext.Provider>

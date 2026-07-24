@@ -386,3 +386,213 @@ fn pure_calculate_claimable_amount_subtracts_already_claimed_and_honours_cliff()
     schedule.claimed_amount = 1_000;
     assert_eq!(calculate_claimable_amount(&schedule, 2_500), 0);
 }
+
+// ── Reentrancy guard tests ─────────────────────────────────────────────────────
+
+#[test]
+fn claim_succeeds_and_releases_guard() {
+    let ctx = setup();
+    create_default(&ctx, true);
+    set_time(&ctx.env, END);
+
+    // Normal claim should succeed
+    let claimed = ctx.contract.claim(&ctx.beneficiary);
+    assert_eq!(claimed, TOTAL);
+
+    // Verify guard is released by calling again (should return NothingToClaim, not ReentrancyDetected)
+    let second = ctx.contract.try_claim(&ctx.beneficiary);
+    assert_eq!(second, Err(Ok(ContractError::NothingToClaim)));
+}
+
+#[test]
+fn claim_releases_guard_on_error() {
+    let ctx = setup();
+    create_default(&ctx, true);
+
+    // Try to claim before cliff (should fail)
+    set_time(&ctx.env, CLIFF - 1);
+    let result = ctx.contract.try_claim(&ctx.beneficiary);
+    assert_eq!(result, Err(Ok(ContractError::CliffNotReached)));
+
+    // After error, guard should be released - try again after cliff
+    set_time(&ctx.env, END);
+    let claimed = ctx.contract.claim(&ctx.beneficiary);
+    assert_eq!(claimed, TOTAL);
+}
+
+#[test]
+fn revoke_succeeds_and_releases_guard() {
+    let ctx = setup();
+    create_default(&ctx, true);
+
+    // Revoke should succeed
+    let returned = ctx.contract.revoke(&ctx.admin, &ctx.beneficiary);
+    assert_eq!(returned, TOTAL);
+
+    // Verify guard Released by trying again (should return AlreadyRevoked, not ReentrancyDetected)
+    let second = ctx.contract.try_revoke(&ctx.admin, &ctx.beneficiary);
+    assert_eq!(second, Err(Ok(ContractError::AlreadyRevoked)));
+}
+
+#[test]
+fn revoke_releases_guard_on_error() {
+    let ctx = setup();
+    create_default(&ctx, false); // non-revocable
+
+    // Try to revoke non-revocable schedule (should fail)
+    let result = ctx.contract.try_revoke(&ctx.admin, &ctx.beneficiary);
+    assert_eq!(result, Err(Ok(ContractError::NotRevocable)));
+
+    // After error, guard should be released - create revocable and try again
+    let stranger = Address::generate(&ctx.env);
+    ctx.contract
+        .create_vesting_schedule(&ctx.admin, &stranger, &TOTAL, &START, &END, &CLIFF, &true);
+    let returned = ctx.contract.revoke(&ctx.admin, &stranger);
+    assert_eq!(returned, TOTAL);
+}
+
+// ── #1188 Cliff-boundary and post-revoke accounting ──────────────────────────
+
+#[test]
+fn cliff_just_before_zero_claimable_exact_boundary() {
+    let ctx = setup();
+    create_default(&ctx, true);
+    // One second strictly before cliff: 0 claimable.
+    set_time(&ctx.env, CLIFF - 1);
+    let schedule = ctx.contract.get_vesting_schedule(&ctx.beneficiary);
+    assert_eq!(calculate_claimable_amount(&schedule, CLIFF - 1), 0);
+    assert_eq!(ctx.contract.get_claimable_amount(&ctx.beneficiary), 0);
+    // Claim also rejected.
+    assert_eq!(
+        ctx.contract.try_claim(&ctx.beneficiary),
+        Err(Ok(ContractError::CliffNotReached))
+    );
+}
+
+#[test]
+fn cliff_at_exactly_cliff_time_claimable_matches_vested() {
+    let ctx = setup();
+    create_default(&ctx, true);
+    set_time(&ctx.env, CLIFF);
+    let schedule = ctx.contract.get_vesting_schedule(&ctx.beneficiary);
+    // Expected vested = elapsed / total_duration * total_amount (exact integer).
+    let expected = (CLIFF - START) as i128 * TOTAL / (END - START) as i128;
+    assert_eq!(calculate_vested_amount(&schedule, CLIFF), expected);
+    assert_eq!(calculate_claimable_amount(&schedule, CLIFF), expected);
+    assert_eq!(
+        ctx.contract.get_claimable_amount(&ctx.beneficiary),
+        expected
+    );
+    // Claim at the exact cliff instant must succeed and return the vested amount.
+    let claimed = ctx.contract.claim(&ctx.beneficiary);
+    assert_eq!(claimed, expected);
+}
+
+#[test]
+fn cliff_just_after_increases_proportionally() {
+    let ctx = setup();
+    create_default(&ctx, true);
+    let schedule = ctx.contract.get_vesting_schedule(&ctx.beneficiary);
+    let at_cliff = (CLIFF - START) as i128 * TOTAL / (END - START) as i128;
+    let at_cliff_plus_one = (CLIFF + 1 - START) as i128 * TOTAL / (END - START) as i128;
+    // Vested amount at cliff+1 is ≥ at cliff.
+    assert!(at_cliff_plus_one >= at_cliff);
+    assert_eq!(calculate_vested_amount(&schedule, CLIFF), at_cliff);
+    assert_eq!(
+        calculate_vested_amount(&schedule, CLIFF + 1),
+        at_cliff_plus_one
+    );
+    assert_eq!(
+        calculate_claimable_amount(&schedule, CLIFF + 1),
+        at_cliff_plus_one
+    );
+}
+
+#[test]
+fn vesting_progression_at_start_mid_and_end() {
+    let env = Env::default();
+    let schedule = VestingSchedule {
+        beneficiary: Address::generate(&env),
+        total_amount: 12_000,
+        claimed_amount: 0,
+        start_time: 0,
+        end_time: 12_000,
+        cliff_time: 0,
+        revocable: true,
+        revoked: false,
+    };
+    assert_eq!(calculate_vested_amount(&schedule, 0), 0);
+    assert_eq!(calculate_vested_amount(&schedule, 3_000), 3_000);
+    assert_eq!(calculate_vested_amount(&schedule, 6_000), 6_000);
+    assert_eq!(calculate_vested_amount(&schedule, 9_000), 9_000);
+    assert_eq!(calculate_vested_amount(&schedule, 12_000), 12_000);
+    assert_eq!(calculate_vested_amount(&schedule, 20_000), 12_000); // capped at total
+                                                                    // Claimable mirrors vested when cliff=start and nothing yet claimed.
+    assert_eq!(calculate_claimable_amount(&schedule, 6_000), 6_000);
+    assert_eq!(calculate_claimable_amount(&schedule, 12_000), 12_000);
+}
+
+#[test]
+fn post_revoke_beneficiary_fully_blocked_regardless_of_vested() {
+    let ctx = setup();
+    create_default(&ctx, true);
+
+    // Claim a quarter of vested tokens before revoke.
+    set_time(&ctx.env, START + (END - START) / 4);
+    let claimed = ctx.contract.claim(&ctx.beneficiary);
+    assert_eq!(claimed, TOTAL / 4);
+
+    // Admin revokes; returned = total - already_claimed.
+    let returned = ctx.contract.revoke(&ctx.admin, &ctx.beneficiary);
+    assert_eq!(returned, TOTAL - TOTAL / 4);
+
+    // At or after end the schedule is fully vested but the beneficiary is blocked.
+    set_time(&ctx.env, END);
+    assert_eq!(
+        ctx.contract.try_claim(&ctx.beneficiary),
+        Err(Ok(ContractError::Revoked))
+    );
+}
+
+#[test]
+fn post_revoke_with_no_prior_claims_all_returned_and_blocked() {
+    let ctx = setup();
+    create_default(&ctx, true);
+    // No claims before revoke — full amount returned.
+    let returned = ctx.contract.revoke(&ctx.admin, &ctx.beneficiary);
+    assert_eq!(returned, TOTAL);
+    // Beneficiary cannot claim anything after revoke.
+    set_time(&ctx.env, END);
+    assert_eq!(
+        ctx.contract.try_claim(&ctx.beneficiary),
+        Err(Ok(ContractError::Revoked))
+    );
+}
+
+#[test]
+fn claim_idempotency_never_double_pays() {
+    let ctx = setup();
+    create_default(&ctx, true);
+    set_time(&ctx.env, CLIFF);
+
+    // First claim at cliff: some tokens released.
+    let first = ctx.contract.claim(&ctx.beneficiary);
+    assert!(first > 0);
+
+    // Second claim at the same instant: nothing more to pay.
+    assert_eq!(
+        ctx.contract.try_claim(&ctx.beneficiary),
+        Err(Ok(ContractError::NothingToClaim))
+    );
+
+    // Advance to end and claim the remainder.
+    set_time(&ctx.env, END);
+    let second = ctx.contract.claim(&ctx.beneficiary);
+    assert_eq!(first + second, TOTAL, "total paid must equal total_amount");
+
+    // Another claim at end: nothing left.
+    assert_eq!(
+        ctx.contract.try_claim(&ctx.beneficiary),
+        Err(Ok(ContractError::NothingToClaim))
+    );
+}

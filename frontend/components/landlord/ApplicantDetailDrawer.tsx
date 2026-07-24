@@ -1,6 +1,6 @@
 "use client";
 
-import { Applicant } from "@/lib/mockData";
+import { type LandlordApplicationRecord } from "@/lib/landlordPropertiesApi";
 import {
   Drawer,
   DrawerContent,
@@ -26,7 +26,7 @@ import {
 } from "lucide-react";
 
 interface ApplicantDetailDrawerProps {
-  applicant: Applicant | null;
+  applicant: LandlordApplicationRecord | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onApprove: (applicantId: string) => void;
@@ -41,6 +41,8 @@ export function ApplicantDetailDrawer({
   onReject,
 }: ApplicantDetailDrawerProps) {
   if (!applicant) return null;
+
+  const displayDate = applicant.applicationDate ?? applicant.appliedAt;
 
   const getDocumentStatusIcon = (status: string) => {
     switch (status) {
@@ -92,17 +94,21 @@ export function ApplicantDetailDrawer({
             <div className="flex items-start justify-between">
               <div className="flex-1">
                 <DrawerTitle className="text-2xl font-bold">
-                  {applicant.name}
+                  {applicant.name ?? `Applicant ${applicant.tenantId.slice(0, 8)}`}
                 </DrawerTitle>
                 <div className="mt-2 flex flex-wrap gap-4 text-sm text-muted-foreground">
-                  <span className="flex items-center gap-1">
-                    <Mail className="h-4 w-4" />
-                    {applicant.email}
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <Phone className="h-4 w-4" />
-                    {applicant.phone}
-                  </span>
+                  {applicant.email && (
+                    <span className="flex items-center gap-1">
+                      <Mail className="h-4 w-4" />
+                      {applicant.email}
+                    </span>
+                  )}
+                  {applicant.phone && (
+                    <span className="flex items-center gap-1">
+                      <Phone className="h-4 w-4" />
+                      {applicant.phone}
+                    </span>
+                  )}
                 </div>
               </div>
               <ApplicationStatusBadge status={applicant.status} />
@@ -111,7 +117,6 @@ export function ApplicantDetailDrawer({
 
           <div className="flex-1 overflow-y-auto p-6">
             <div className="space-y-6">
-              {/* Application Details */}
               <Card className="border-3 border-foreground p-4 shadow-[4px_4px_0px_0px_rgba(26,26,26,1)]">
                 <h3 className="mb-3 text-lg font-bold">Application Details</h3>
                 <div className="grid gap-3 text-sm">
@@ -119,94 +124,115 @@ export function ApplicantDetailDrawer({
                     <Calendar className="h-4 w-4 text-muted-foreground" />
                     <span className="text-muted-foreground">Applied:</span>
                     <span className="font-medium">
-                      {new Date(applicant.applicationDate).toLocaleDateString()}
+                      {new Date(displayDate).toLocaleDateString()}
                     </span>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Briefcase className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-muted-foreground">Employment:</span>
-                    <span className="font-medium">{applicant.employmentStatus}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <DollarSign className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-muted-foreground">Income Band:</span>
-                    <span className="font-medium">{applicant.incomeBand}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Star className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-muted-foreground">Rating Card Score:</span>
-                    <span className="font-bold text-primary">
-                      {applicant.ratingCardScore}/100
-                    </span>
-                  </div>
+                  {applicant.paymentPlan && (
+                    <div className="flex items-center gap-2">
+                      <span className="text-muted-foreground">Payment plan:</span>
+                      <span className="font-medium">{applicant.paymentPlan}</span>
+                    </div>
+                  )}
+                  {applicant.employmentStatus && (
+                    <div className="flex items-center gap-2">
+                      <Briefcase className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-muted-foreground">Employment:</span>
+                      <span className="font-medium">{applicant.employmentStatus}</span>
+                    </div>
+                  )}
+                  {applicant.incomeBand && (
+                    <div className="flex items-center gap-2">
+                      <DollarSign className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-muted-foreground">Income Band:</span>
+                      <span className="font-medium">{applicant.incomeBand}</span>
+                    </div>
+                  )}
+                  {applicant.ratingCardScore != null && (
+                    <div className="flex items-center gap-2">
+                      <Star className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-muted-foreground">Rating Card Score:</span>
+                      <span className="font-bold text-primary">
+                        {applicant.ratingCardScore}/100
+                      </span>
+                    </div>
+                  )}
+                  {applicant.coverNote && (
+                    <div>
+                      <span className="text-muted-foreground">Cover note:</span>
+                      <p className="mt-1 font-medium">{applicant.coverNote}</p>
+                    </div>
+                  )}
                 </div>
               </Card>
 
-              {/* Income Verification Status */}
-              <Card className="border-3 border-foreground p-4 shadow-[4px_4px_0px_0px_rgba(26,26,26,1)]">
-                <h3 className="mb-3 text-lg font-bold">Income Verification</h3>
-                <div className="text-lg font-medium">
-                  {getIncomeVerificationStatus()}
-                </div>
-              </Card>
+              {applicant.incomeVerificationStatus && (
+                <Card className="border-3 border-foreground p-4 shadow-[4px_4px_0px_0px_rgba(26,26,26,1)]">
+                  <h3 className="mb-3 text-lg font-bold">Income Verification</h3>
+                  <div className="text-lg font-medium">
+                    {getIncomeVerificationStatus()}
+                  </div>
+                </Card>
+              )}
 
-              {/* Rating Card Link */}
-              <Card className="border-3 border-foreground p-4 shadow-[4px_4px_0px_0px_rgba(26,26,26,1)]">
-                <h3 className="mb-3 text-lg font-bold">Tenant Rating Card</h3>
-                <Button
-                  variant="outline"
-                  className="border-3 border-foreground"
-                  asChild
-                >
-                  <a
-                    href={applicant.ratingCardLink}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-2"
+              {applicant.ratingCardLink && (
+                <Card className="border-3 border-foreground p-4 shadow-[4px_4px_0px_0px_rgba(26,26,26,1)]">
+                  <h3 className="mb-3 text-lg font-bold">Tenant Rating Card</h3>
+                  <Button
+                    variant="outline"
+                    className="border-3 border-foreground"
+                    asChild
                   >
-                    <ExternalLink className="h-4 w-4" />
-                    View Full Rating Card
-                  </a>
-                </Button>
-              </Card>
-
-              {/* Uploaded Documents */}
-              <Card className="border-3 border-foreground p-4 shadow-[4px_4px_0px_0px_rgba(26,26,26,1)]">
-                <h3 className="mb-3 text-lg font-bold">Uploaded Documents</h3>
-                <div className="space-y-2">
-                  {applicant.documents.map((doc) => (
-                    <div
-                      key={doc.id}
-                      className="flex items-center justify-between rounded-md border-2 border-foreground bg-muted p-3"
+                    <a
+                      href={applicant.ratingCardLink}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-2"
                     >
-                      <div className="flex items-center gap-3">
-                        <FileText className="h-5 w-5 text-muted-foreground" />
-                        <div>
-                          <p className="font-medium">{doc.name}</p>
-                          <p className="text-xs text-muted-foreground">{doc.type}</p>
+                      <ExternalLink className="h-4 w-4" />
+                      View Full Rating Card
+                    </a>
+                  </Button>
+                </Card>
+              )}
+
+              {applicant.documents && applicant.documents.length > 0 && (
+                <Card className="border-3 border-foreground p-4 shadow-[4px_4px_0px_0px_rgba(26,26,26,1)]">
+                  <h3 className="mb-3 text-lg font-bold">Uploaded Documents</h3>
+                  <div className="space-y-2">
+                    {applicant.documents.map((doc) => (
+                      <div
+                        key={doc.id}
+                        className="flex items-center justify-between rounded-md border-2 border-foreground bg-muted p-3"
+                      >
+                        <div className="flex items-center gap-3">
+                          <FileText className="h-5 w-5 text-muted-foreground" />
+                          <div>
+                            <p className="font-medium">{doc.name}</p>
+                            <p className="text-xs text-muted-foreground">{doc.type}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {getDocumentStatusIcon(doc.status)}
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="border-2 border-foreground text-xs"
+                            asChild
+                          >
+                            <a
+                              href={doc.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                            >
+                              View
+                            </a>
+                          </Button>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        {getDocumentStatusIcon(doc.status)}
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="border-2 border-foreground text-xs"
-                          asChild
-                        >
-                          <a
-                            href={doc.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                          >
-                            View
-                          </a>
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </Card>
+                    ))}
+                  </div>
+                </Card>
+              )}
             </div>
           </div>
 

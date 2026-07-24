@@ -242,7 +242,63 @@ Logs stored in:
 * DEK rotation: every 90 days
 * KEK rotation: annually via KMS
 
-### Manual Rotation Procedure
+### Signing Key Rotation (Automated State Machine)
+
+The signing key rotation is managed by `SigningKeyRotationService` which implements a crash-safe, overlapping dual-key validity state machine.
+
+#### State Machine
+
+The rotation progresses through these durable, idempotent states:
+
+1. **new_key_provisioned** - New key pair generated and stored securely
+2. **new_key_authorized_on_chain** - New signer added to Stellar account (dual-key window starts)
+3. **active_pointer_cutover** - Atomic switch to use new key for signing
+4. **old_key_deauthorized_on_chain** - Old signer removed from Stellar account (dual-key window ends)
+5. **old_key_destroyed** - Old key material securely destroyed
+6. **completed** - Rotation finished successfully
+7. **failed** - Rotation failed with reason (requires manual intervention)
+
+#### Key Guarantees
+
+- **Zero-valid-signer window prevention**: At least one valid signer exists at every instant (add-before-remove ordering)
+- **In-flight transaction safety**: Transactions signed with old key before cutover can still confirm during dual-key window
+- **Crash safety**: Each state is durable; crash at any point resumes deterministically
+- **Atomic cutover**: Active-key pointer switch is atomic in the database
+- **Secure destruction**: Retired key material is securely destroyed and fully audit-logged
+- **Sequence coordination**: Works with `StellarSequenceAllocator` to prevent stranded sequences
+
+#### Usage
+
+```typescript
+import { getSigningKeyRotationService } from '../services/signingKeyRotationService.js'
+
+const rotationService = getSigningKeyRotationService()
+
+// Start a new rotation
+const result = await rotationService.startRotation({
+  keyType: 'admin',
+  accountAddress: 'G...',
+  initiatedBy: 'admin-user-id',
+})
+
+// Advance to next state (call repeatedly until completed)
+const advanced = await rotationService.advanceRotation(result.rotationId)
+```
+
+#### Integration with Signing Services
+
+`AdminSigningService` automatically respects rotation state by querying `getActiveKey()` before signing. If a rotation is in progress, it uses the active key pointer; otherwise, it falls back to the configured environment variable.
+
+#### Audit Logging
+
+All rotation events are logged to the `audit_log` column in `signing_key_rotations` table with:
+- Timestamp
+- Event type (state transition)
+- Relevant details (key IDs, public keys, transaction hashes)
+
+#### Manual Rotation Procedure (Legacy)
+
+For wallet encryption keys (DEK/KEK):
 
 1. Generate new DEK
 2. Re-encrypt private key

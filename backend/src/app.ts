@@ -157,10 +157,12 @@ import { createKycRouter } from "./routes/kyc.js";
 import { createAdminRolesRouter } from "./routes/adminRoles.js";
 import { createAbuseRouter } from "./routes/abuse.js";
 import { createInspectorJobsRouter, createAdminInspectorJobsRouter } from "./routes/inspectorJobs.js";
+import { createPropertyInspectionsRouter } from "./routes/propertyInspections.js";
 import { createRentGuaranteeRouter } from "./routes/rentGuarantee.js";
 import { createTenantRatingCardRouter } from "./routes/tenantRatingCard.js";
 import { createRentGuaranteeProviderFromEnv } from "./services/insurance/rentGuaranteeProviderFactory.js";
 import { createAdminCreditScoreRouter, createCreditScoreRouter } from "./routes/creditScore.js";
+import { createSorobanContractsRouter } from "./routes/sorobanContracts.js";
 
 import { initFraudStore, PostgresFraudStore } from "./fraud/index.js";
 import { createAdminFraudRouter } from "./routes/adminFraud.js";
@@ -635,6 +637,7 @@ export function createApp() {
   app.use(createPublicRateLimiter(env))
 
   app.use("/", publicRouter)
+  app.use("/soroban", createSorobanContractsRouter())
   app.use('/api/v1', createBalanceRouter(sorobanAdapter))
   app.use('/api/v1', createReceiptsRouter(receiptRepo))
   app.use('/api/v1/wallet', createWalletRateLimiter(env), createWalletRouter(walletService))
@@ -889,12 +892,15 @@ export function createApp() {
   app.use('/api/v1/inspector', authenticateToken, requireFlag('INSPECTOR_DASHBOARD_ENABLED'), createInspectorJobsRouter(sorobanAdapter))
   app.use('/api/v1/admin/inspector', authenticateToken, requireFlag('INSPECTOR_DASHBOARD_ENABLED'), createAdminInspectorJobsRouter())
 
+  // Property inspection routes
+  app.use('/api/v1', createPropertyInspectionsRouter())
+
   // Rent guarantee insurance routes
   const rentGuaranteeProvider = createRentGuaranteeProviderFromEnv(process.env.RENT_GUARANTEE_PROVIDER)
   app.use('/api/v1', createRentGuaranteeRouter(rentGuaranteeProvider))
 
   // Tenant rating card routes
-  app.use('/api/v1', createTenantRatingCardRouter())
+  app.use('/api/v1', createTenantRatingCardRouter(sorobanAdapter))
 
   // Interactive API documentation
   app.use("/docs", createDocsRouter());

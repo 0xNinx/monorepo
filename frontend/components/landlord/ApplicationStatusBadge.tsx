@@ -2,7 +2,7 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
 interface ApplicationStatusBadgeProps {
-  status: "pending" | "approved" | "rejected";
+  status: "pending" | "under_review" | "approved" | "rejected" | "withdrawn";
 }
 
 export function ApplicationStatusBadge({ status }: ApplicationStatusBadgeProps) {
@@ -13,6 +13,11 @@ export function ApplicationStatusBadge({ status }: ApplicationStatusBadgeProps) 
           label: "Pending",
           className: "bg-accent border-foreground text-foreground",
         };
+      case "under_review":
+        return {
+          label: "Under Review",
+          className: "bg-yellow-100 border-foreground text-yellow-800",
+        };
       case "approved":
         return {
           label: "Approved",
@@ -22,6 +27,11 @@ export function ApplicationStatusBadge({ status }: ApplicationStatusBadgeProps) 
         return {
           label: "Rejected",
           className: "bg-destructive border-foreground text-destructive-foreground",
+        };
+      case "withdrawn":
+        return {
+          label: "Withdrawn",
+          className: "bg-muted border-foreground text-muted-foreground",
         };
       default:
         return {

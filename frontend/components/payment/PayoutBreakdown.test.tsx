@@ -5,6 +5,7 @@ import type { PayoutBreakdown as PayoutBreakdownType } from "@/lib/paymentApi";
 
 // Mock next-intl
 vi.mock("next-intl", () => ({
+  useLocale: () => "en-NG",
   useTranslations: (namespace: string) => {
     // Simple mock that returns the key or a mapped value
     const messages: Record<string, Record<string, string>> = {

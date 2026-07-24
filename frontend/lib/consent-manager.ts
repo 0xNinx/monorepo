@@ -11,7 +11,7 @@ interface ConsentCategory {
   purposes: string[]
 }
 
-interface ConsentPreferences {
+export interface ConsentPreferences {
   analytics: boolean
   performance: boolean
   functional: boolean
@@ -134,6 +134,25 @@ class ConsentManager {
       if (stored) {
         this.preferences = JSON.parse(stored)
         this.applyConsent()
+        return
+      }
+
+      // Fallback/Migration from old shelterflex_cookie_consent storage key
+      const oldStored = globalThis.localStorage?.getItem('shelterflex_cookie_consent')
+      if (oldStored) {
+        const parsed = JSON.parse(oldStored)
+        if (parsed && parsed.categories) {
+          this.preferences = {
+            analytics: parsed.categories.analytics ?? false,
+            performance: parsed.categories.analytics ?? false, // Sync performance with analytics
+            functional: parsed.categories.functional ?? false,
+            marketing: parsed.categories.marketing ?? false,
+            version: parsed.version || '1.0',
+            timestamp: parsed.timestamp ? new Date(parsed.timestamp).getTime() : Date.now()
+          }
+          this.savePreferences()
+          this.applyConsent()
+        }
       }
     } catch (error) {
       console.warn('Failed to load consent preferences:', error)
@@ -151,20 +170,79 @@ class ConsentManager {
     }
   }
 
-  private applyConsent(): void {
-    // Apply analytics consent
-    if (this.preferences.analytics) {
-      analytics.setConsent({ analytics: true })
-      analytics.initialize()
-    } else {
-      analytics.setConsent({ analytics: false })
+  private clearCookiesAndStorageForCategory(categoryId: string): void {
+    if (typeof globalThis === 'undefined' || typeof document === 'undefined') return
+
+    const category = this.getCategory(categoryId)
+    if (!category) return
+
+    // Clear cookies
+    try {
+      const cookies = document.cookie.split(';')
+      for (const cookie of cookies) {
+        const eqPos = cookie.indexOf('=')
+        const name = eqPos > -1 ? cookie.substring(0, eqPos).trim() : cookie.trim()
+        
+        // Match exactly or with wildcard
+        const matches = category.cookies.some(pattern => {
+          if (pattern.endsWith('*')) {
+            const prefix = pattern.slice(0, -1)
+            return name.startsWith(prefix)
+          }
+          return name === pattern
+        })
+
+        if (matches) {
+          // Clear cookie
+          document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;`
+          // Also clear for current domain and subdomains
+          document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; domain=${window.location.hostname}`
+          const hostParts = window.location.hostname.split('.')
+          if (hostParts.length > 1) {
+            const domain = '.' + hostParts.slice(-2).join('.')
+            document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; domain=${domain}`
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to clear cookies for category:', categoryId, e)
     }
 
-    // Apply performance consent
-    if (this.preferences.performance) {
-      performanceTracking.startTracking()
-    } else {
-      performanceTracking.stopTracking()
+    // Clear localStorage keys if any match
+    try {
+      category.cookies.forEach(pattern => {
+        if (pattern.endsWith('*')) {
+          const prefix = pattern.slice(0, -1)
+          const keysToRemove: string[] = []
+          for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i)
+            if (key && key.startsWith(prefix)) {
+              keysToRemove.push(key)
+            }
+          }
+          keysToRemove.forEach(key => localStorage.removeItem(key))
+        } else {
+          localStorage.removeItem(pattern)
+        }
+      })
+    } catch (e) {
+      console.warn('Failed to clear storage for category:', categoryId, e)
+    }
+  }
+
+  private applyConsent(): void {
+    // Clear cookies/storage for revoked categories
+    if (!this.preferences.analytics) {
+      this.clearCookiesAndStorageForCategory('analytics')
+    }
+    if (!this.preferences.performance) {
+      this.clearCookiesAndStorageForCategory('performance')
+    }
+    if (!this.preferences.functional) {
+      this.clearCookiesAndStorageForCategory('functional')
+    }
+    if (!this.preferences.marketing) {
+      this.clearCookiesAndStorageForCategory('marketing')
     }
 
     // Apply functional consent
@@ -379,6 +457,7 @@ class ConsentManager {
       globalThis.localStorage?.removeItem('consent_preferences')
       globalThis.localStorage?.removeItem('analytics_user_id')
       globalThis.localStorage?.removeItem('analytics_consent')
+      globalThis.localStorage?.removeItem('shelterflex_cookie_consent')
     }
 
     // Apply changes
@@ -473,7 +552,10 @@ class ConsentManager {
       timestamp: 0
     }
     
-    this.savePreferences()
+    if (typeof globalThis !== 'undefined') {
+      globalThis.localStorage?.removeItem('consent_preferences')
+      globalThis.localStorage?.removeItem('shelterflex_cookie_consent')
+    }
     this.applyConsent()
     this.showBanner()
   }

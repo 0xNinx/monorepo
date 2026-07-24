@@ -13,18 +13,67 @@ import {
   X,
   Menu,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 export function LandlordSidebar() {
   const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const sidebarRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const focusable = sidebarRef.current?.querySelectorAll<HTMLElement>(
+      'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])',
+    );
+    const first = focusable?.[0];
+    const last = focusable?.[focusable.length - 1];
+    first?.focus();
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setIsOpen(false);
+        triggerRef.current?.focus();
+        return;
+      }
+      if (event.key !== "Tab" || !first || !last) return;
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    }
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [isOpen]);
+
+  function closeSidebar() {
+    setIsOpen(false);
+    triggerRef.current?.focus();
+  }
 
   const navItems = [
     { href: "/dashboard/landlord", label: "Dashboard", icon: Home },
-    { href: "/dashboard/landlord/properties", label: "My Properties", icon: Building2 },
+    {
+      href: "/dashboard/landlord/properties",
+      label: "My Properties",
+      icon: Building2,
+    },
     { href: "/dashboard/landlord/tenants", label: "My Tenants", icon: Users },
-    { href: "/dashboard/landlord/payouts", label: "Payout Schedule", icon: DollarSign },
-    { href: "/dashboard/landlord/analytics", label: "Analytics", icon: BarChart3 },
+    {
+      href: "/dashboard/landlord/payouts",
+      label: "Payout Schedule",
+      icon: DollarSign,
+    },
+    {
+      href: "/dashboard/landlord/analytics",
+      label: "Analytics",
+      icon: BarChart3,
+    },
     { href: "/messages", label: "Messages", icon: MessageSquare, badge: 3 },
     { href: "/dashboard/landlord/settings", label: "Settings", icon: Settings },
   ];
@@ -33,8 +82,17 @@ export function LandlordSidebar() {
     <>
       {/* Mobile Menu Button */}
       <button
+        ref={triggerRef}
+        type="button"
+        aria-label={
+          isOpen
+            ? "Close landlord dashboard navigation"
+            : "Open landlord dashboard navigation"
+        }
+        aria-expanded={isOpen}
+        aria-controls="landlord-dashboard-sidebar"
         onClick={() => setIsOpen(!isOpen)}
-        className="fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center border-3 border-foreground bg-primary shadow-[4px_4px_0px_0px_rgba(26,26,26,1)] lg:hidden"
+        className="fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center border-3 border-foreground bg-primary outline-none shadow-[4px_4px_0px_0px_rgba(26,26,26,1)] focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 lg:hidden"
       >
         {isOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
       </button>
@@ -45,12 +103,15 @@ export function LandlordSidebar() {
           type="button"
           aria-label="Close sidebar"
           className="fixed inset-0 z-40 bg-foreground/50 lg:hidden"
-          onClick={() => setIsOpen(false)}
+          onClick={closeSidebar}
         />
       )}
 
       <aside
-        className={`fixed left-0 top-0 z-40 h-screen w-64 border-r-3 border-foreground bg-card pt-20 transition-transform lg:translate-x-0 ${isOpen ? "translate-x-0" : "-translate-x-full"}`}
+        id="landlord-dashboard-sidebar"
+        ref={sidebarRef}
+        aria-label="Landlord dashboard navigation"
+        className={`fixed left-0 rtl:right-0 rtl:left-auto top-0 z-40 h-screen w-64 border-r-3 rtl:border-r-0 rtl:border-l-3 border-foreground bg-card pt-20 transition-transform lg:translate-x-0 ${isOpen ? "translate-x-0" : "-translate-x-full rtl:translate-x-full"}`}
       >
         <div className="flex h-full flex-col px-4 py-6">
           <div className="mb-8 border-3 border-foreground bg-accent p-4 shadow-[4px_4px_0px_0px_rgba(26,26,26,1)]">
@@ -62,15 +123,19 @@ export function LandlordSidebar() {
           <nav className="flex-1 space-y-2">
             {navItems.map((item) => {
               const Icon = item.icon;
-              const isActive = pathname === item.href;
+              const isActive =
+                pathname === item.href ||
+                (item.href !== "/dashboard/landlord" &&
+                  pathname.startsWith(item.href + "/"));
               return (
                 <Link
                   key={item.href}
                   href={item.href}
-                  className={`flex items-center gap-3 border-3 border-foreground p-3 font-bold transition-all shadow-[4px_4px_0px_0px_rgba(26,26,26,1)] hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-[2px_2px_0px_0px_rgba(26,26,26,1)] ${
+                  className={`flex items-center gap-3 border-3 border-foreground p-3 font-bold outline-none transition-all shadow-[4px_4px_0px_0px_rgba(26,26,26,1)] hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-[2px_2px_0px_0px_rgba(26,26,26,1)] focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 ${
                     isActive ? "bg-primary" : "bg-card hover:bg-muted"
                   }`}
-                  onClick={() => setIsOpen(false)}
+                  aria-current={isActive ? "page" : undefined}
+                  onClick={closeSidebar}
                 >
                   <Icon className="h-5 w-5" />
                   {item.label}

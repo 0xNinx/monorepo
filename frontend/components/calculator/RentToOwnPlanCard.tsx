@@ -2,19 +2,11 @@
 
 import { TrendingUp, Home, CalendarClock, AlertCircle } from "lucide-react";
 import type { RentToOwnResult } from "@/lib/rentToOwnCalc";
+import { formatNgn } from "@/lib/currency";
 
 interface Props {
   result: RentToOwnResult;
   propertyPrice: number;
-}
-
-function formatFull(val: number): string {
-  return new Intl.NumberFormat("en-NG", {
-    style: "currency",
-    currency: "NGN",
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(val);
 }
 
 export default function RentToOwnPlanCard({ result, propertyPrice }: Props) {
@@ -66,7 +58,7 @@ export default function RentToOwnPlanCard({ result, propertyPrice }: Props) {
           <div className="border-3 border-foreground bg-primary/10 p-4">
             <p className="text-xs text-muted-foreground">Total Monthly Payment</p>
             <p className="font-mono text-3xl md:text-4xl font-black text-primary">
-              {formatFull(requiredMonthlyPayment)}
+              {formatNgn(requiredMonthlyPayment)}
             </p>
             <p className="text-xs text-muted-foreground mt-1">
               for {totalMonths} months ({totalMonths / 12} years)
@@ -79,7 +71,7 @@ export default function RentToOwnPlanCard({ result, propertyPrice }: Props) {
                 Estimated rent component
               </span>
               <span className="font-mono font-bold">
-                {formatFull(monthlyRentEquivalent)}
+                {formatNgn(monthlyRentEquivalent)}
               </span>
             </div>
             <div className="flex justify-between items-center border-b border-dashed border-foreground/20 pb-2">
@@ -92,21 +84,21 @@ export default function RentToOwnPlanCard({ result, propertyPrice }: Props) {
                 }`}
               >
                 {isEquityPositive ? "+" : ""}
-                {formatFull(equityPortion)}
+                {formatNgn(equityPortion)}
               </span>
             </div>
             <div className="flex justify-between items-center border-b border-dashed border-foreground/20 pb-2">
               <span className="text-sm text-muted-foreground">
                 Initial deposit (upfront)
               </span>
-              <span className="font-mono font-bold">{formatFull(deposit)}</span>
+              <span className="font-mono font-bold">{formatNgn(deposit)}</span>
             </div>
             <div className="flex justify-between items-center border-b border-dashed border-foreground/20 pb-2">
               <span className="text-sm text-muted-foreground">
                 Total interest paid
               </span>
               <span className="font-mono font-bold text-muted-foreground">
-                {formatFull(totalInterest)}
+                {formatNgn(totalInterest)}
               </span>
             </div>
           </div>
@@ -123,7 +115,7 @@ export default function RentToOwnPlanCard({ result, propertyPrice }: Props) {
               <p className="text-xs text-muted-foreground mb-1">
                 Rent-to-Own total cost
               </p>
-              <p className="font-mono text-base font-black">{formatFull(totalCostRTO)}</p>
+              <p className="font-mono text-base font-black">{formatNgn(totalCostRTO)}</p>
               <p className="text-xs text-secondary font-bold mt-0.5">
                 You own the property
               </p>
@@ -132,7 +124,7 @@ export default function RentToOwnPlanCard({ result, propertyPrice }: Props) {
               <p className="text-xs text-muted-foreground mb-1">
                 Standard rent total cost
               </p>
-              <p className="font-mono text-base font-black">{formatFull(totalCostRent)}</p>
+              <p className="font-mono text-base font-black">{formatNgn(totalCostRent)}</p>
               <p className="text-xs text-destructive font-bold mt-0.5">
                 Nothing to show for it
               </p>
@@ -142,7 +134,7 @@ export default function RentToOwnPlanCard({ result, propertyPrice }: Props) {
             <span className="font-mono text-xs font-bold">Net advantage (incl. property value)</span>
             <span className="font-mono font-black text-secondary text-sm">
               {netAdvantage > 0 ? "+" : ""}
-              {formatFull(netAdvantage)}
+              {formatNgn(netAdvantage)}
             </span>
           </div>
         </div>
@@ -168,7 +160,7 @@ export default function RentToOwnPlanCard({ result, propertyPrice }: Props) {
               </p>
               <p className="text-xs text-muted-foreground mt-0.5">
                 Your monthly budget is below the required payment of{" "}
-                <strong>{formatFull(requiredMonthlyPayment)}</strong> to reach
+                <strong>{formatNgn(requiredMonthlyPayment)}</strong> to reach
                 ownership in {totalMonths / 12} years. Increase your budget or
                 extend the ownership timeline.
               </p>

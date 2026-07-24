@@ -2,13 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import Image from "next/image";
 import {
-  Home,
   Plus,
   Building2,
-  MessageSquare,
-  Settings,
   MapPin,
   Bed,
   Bath,
@@ -18,6 +14,7 @@ import {
   Eye,
   EyeOff,
   RotateCcw,
+  Trash2,
   Search,
   AlertTriangle,
 } from "lucide-react";
@@ -30,9 +27,54 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { PropertyImageCarousel } from "@/components/property-card";
 import { PropertyCardSkeleton } from "@/components/property-card-skeleton";
-import { landlordProperties } from "@/lib/mockData";
+import {
+  type LandlordPropertyRecord,
+  type LandlordPropertyStatus,
+  listLandlordProperties,
+  deactivateLandlordProperty,
+  relistLandlordProperty,
+  deleteLandlordProperty,
+} from "@/lib/landlordPropertiesApi";
+import { showSuccessToast, showErrorToast } from "@/lib/toast";
+import { DashboardSidebar } from "@/components/dashboard/DashboardSidebar";
+
+function formatLocation(property: LandlordPropertyRecord): string {
+  const parts = [property.area, property.city].filter(Boolean);
+  return parts.length > 0 ? parts.join(", ") : property.address;
+}
+
+function statusPresentation(status: LandlordPropertyStatus): {
+  label: string;
+  className: string;
+} {
+  switch (status) {
+    case "approved":
+    case "active":
+      return { label: "Approved", className: "bg-green-100 text-green-800" };
+    case "rented":
+      return { label: "Rented", className: "bg-blue-100 text-blue-800" };
+    case "pending_review":
+    case "pending":
+      return { label: "Pending Review", className: "bg-yellow-100 text-yellow-800" };
+    case "deactivated":
+    case "inactive":
+      return { label: "Deactivated", className: "bg-gray-100 text-gray-800" };
+    default:
+      return { label: status, className: "bg-gray-100 text-gray-800" };
+  }
+}
 
 export default function LandlordPropertiesPage() {
   const [searchQuery, setSearchQuery] = useState("");
@@ -40,6 +82,8 @@ export default function LandlordPropertiesPage() {
   const [properties, setProperties] = useState<LandlordPropertyRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const loadProperties = useCallback(async () => {
     setIsLoading(true);
@@ -93,6 +137,21 @@ export default function LandlordPropertiesPage() {
     }
   };
 
+  const handleDeleteConfirm = async () => {
+    if (!deleteTarget) return;
+    setIsDeleting(true);
+    try {
+      await deleteLandlordProperty(deleteTarget);
+      showSuccessToast("Property deleted.");
+      loadProperties();
+    } catch (error) {
+      showErrorToast(error, "Failed to delete property");
+    } finally {
+      setIsDeleting(false);
+      setDeleteTarget(null);
+    }
+  };
+
   const statusFilters = [
     { value: "all", label: "All" },
     { value: "pending_review", label: "Pending" },
@@ -103,47 +162,12 @@ export default function LandlordPropertiesPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <aside className="fixed left-0 top-0 z-40 h-screen w-64 border-r-3 border-foreground bg-card pt-20">
-        <div className="flex h-full flex-col px-4 py-6">
-          <div className="mb-8 border-3 border-foreground bg-accent p-4 shadow-[4px_4px_0px_0px_rgba(26,26,26,1)]">
-            <p className="text-sm font-medium text-foreground">Logged in as</p>
-            <p className="text-lg font-bold text-foreground">Chief Okonkwo</p>
-            <p className="text-sm text-muted-foreground">Landlord</p>
-          </div>
-          <nav className="flex-1 space-y-2">
-            <Link
-              href="/dashboard/landlord"
-              className="flex items-center gap-3 border-3 border-foreground bg-card p-3 font-bold transition-all hover:bg-muted"
-            >
-              <Home className="h-5 w-5" />
-              Dashboard
-            </Link>
-            <Link
-              href="/dashboard/landlord/properties"
-              className="flex items-center gap-3 border-3 border-foreground bg-primary p-3 font-bold shadow-[4px_4px_0px_0px_rgba(26,26,26,1)]"
-            >
-              <Building2 className="h-5 w-5" />
-              My Properties
-            </Link>
-            <Link
-              href="/messages"
-              className="flex items-center gap-3 border-3 border-foreground bg-card p-3 font-bold transition-all hover:bg-muted"
-            >
-              <MessageSquare className="h-5 w-5" />
-              Messages
-            </Link>
-            <Link
-              href="/dashboard/landlord/settings"
-              className="flex items-center gap-3 border-3 border-foreground bg-card p-3 font-bold transition-all hover:bg-muted"
-            >
-              <Settings className="h-5 w-5" />
-              Settings
-            </Link>
-          </nav>
-        </div>
-      </aside>
+      <DashboardSidebar
+        role="landlord"
+        userInfo={{ name: "Chief Okonkwo", roleLabel: "Landlord" }}
+      />
 
-      <main className="ml-64 min-h-screen pt-20">
+      <main className="lg:ml-64 min-h-screen pt-20">
         <div className="p-8">
           <div className="mb-8 flex items-center justify-between">
             <div>
@@ -200,18 +224,37 @@ export default function LandlordPropertiesPage() {
               <Card className="border-3 border-foreground bg-destructive/10 p-12 text-center">
                 <AlertTriangle className="mx-auto h-16 w-16 text-destructive" />
                 <h3 className="mt-4 text-xl font-bold">Properties unavailable</h3>
+                <p className="mt-2 text-muted-foreground">
+                  Could not load your properties. Please try again.
+                </p>
+                <Button
+                  onClick={loadProperties}
+                  className="mt-6 border-3 border-foreground bg-primary font-bold shadow-[4px_4px_0px_0px_rgba(26,26,26,1)]"
+                >
+                  Retry
+                </Button>
               </Card>
             ) : filteredProperties.length === 0 ? (
               <Card className="border-3 border-foreground p-12 text-center">
                 <Building2 className="mx-auto h-16 w-16 text-muted-foreground" />
                 <h3 className="mt-4 text-xl font-bold">No properties found</h3>
+                <p className="mt-2 text-muted-foreground">
+                  {searchQuery || statusFilter !== "all"
+                    ? "Try adjusting your filters."
+                    : "Add your first property to get started."}
+                </p>
+                {!searchQuery && statusFilter === "all" && (
+                  <Link href="/dashboard/landlord/properties/new">
+                    <Button className="mt-6 border-3 border-foreground bg-primary font-bold shadow-[4px_4px_0px_0px_rgba(26,26,26,1)]">
+                      <Plus className="mr-2 h-4 w-4" />
+                      Add Property
+                    </Button>
+                  </Link>
+                )}
               </Card>
             ) : (
               filteredProperties.map((property) => {
                 const { label, className } = statusPresentation(property.status);
-                const primaryPhoto =
-                  property.photos[property.primaryPhotoIndex ?? 0] ??
-                  property.photos[0];
                 const canDeactivate =
                   property.status === "approved" ||
                   property.status === "active" ||
@@ -231,19 +274,18 @@ export default function LandlordPropertiesPage() {
                           property={{
                             listingId: String(property.id),
                             address: property.title,
-                            bedrooms: property.beds,
-                            bathrooms: property.baths,
-                            annualRentNgn: property.price,
+                            bedrooms: property.bedrooms,
+                            bathrooms: property.bathrooms,
+                            annualRentNgn: property.annualRentNgn,
                             photos: property.photos,
-                            hasApprovedInspection:
-                              property.verificationStatus === "VERIFIED",
+                            hasApprovedInspection: false,
                           }}
                           className="aspect-auto h-48 w-full border-0"
                           overlay={
                             <div
-                              className={`absolute left-3 top-3 z-10 border-2 border-foreground px-3 py-1 text-sm font-bold ${statusBadgeClass}`}
+                              className={`absolute left-3 top-3 z-10 border-2 border-foreground px-3 py-1 text-sm font-bold ${className}`}
                             >
-                              {statusLabel}
+                              {label}
                             </div>
                           }
                         />
@@ -305,6 +347,13 @@ export default function LandlordPropertiesPage() {
                                   Relist
                                 </DropdownMenuItem>
                               )}
+                              <DropdownMenuItem
+                                onClick={() => setDeleteTarget(property.id)}
+                                className="text-destructive focus:text-destructive"
+                              >
+                                <Trash2 className="mr-2 h-4 w-4" />
+                                Delete
+                              </DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>
                         </div>
@@ -353,6 +402,36 @@ export default function LandlordPropertiesPage() {
           </div>
         </div>
       </main>
+
+      <AlertDialog
+        open={deleteTarget !== null}
+        onOpenChange={(open) => !open && setDeleteTarget(null)}
+      >
+        <AlertDialogContent className="border-3 border-foreground">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete property?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. The property and all associated data
+              will be permanently removed.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel
+              disabled={isDeleting}
+              className="border-3 border-foreground"
+            >
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteConfirm}
+              disabled={isDeleting}
+              className="border-3 border-foreground bg-destructive text-destructive-foreground"
+            >
+              {isDeleting ? "Deleting…" : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

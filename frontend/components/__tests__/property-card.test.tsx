@@ -99,6 +99,73 @@ describe("PropertyCard", () => {
     expect(screen.getByText("Verified inspection")).toBeInTheDocument();
   });
 
+  it("gives icon-only favorite controls stateful accessible names", () => {
+    const { rerender } = render(
+      <PropertyCard
+        property={{
+          listingId: "listing-1",
+          address: "Modern Flat",
+          city: "Lagos",
+          area: "Yaba",
+          bedrooms: 2,
+          bathrooms: 2,
+          annualRentNgn: 2_000_000,
+        }}
+        isFavorited={false}
+      />,
+    );
+
+    expect(
+      screen.getByRole("button", {
+        name: "Save property: Modern Flat, Yaba, Lagos",
+      }),
+    ).toHaveAttribute("aria-pressed", "false");
+
+    rerender(
+      <PropertyCard
+        property={{
+          listingId: "listing-1",
+          address: "Modern Flat",
+          city: "Lagos",
+          area: "Yaba",
+          bedrooms: 2,
+          bathrooms: 2,
+          annualRentNgn: 2_000_000,
+        }}
+        isFavorited
+      />,
+    );
+
+    expect(
+      screen.getByRole("button", {
+        name: "Saved: Modern Flat, Yaba, Lagos",
+      }),
+    ).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("uses a property-specific accessible name for the details link", () => {
+    render(
+      <PropertyCard
+        property={{
+          listingId: "listing-1",
+          address: "Modern Flat",
+          city: "Lagos",
+          area: "Yaba",
+          bedrooms: 2,
+          bathrooms: 2,
+          annualRentNgn: 2_000_000,
+        }}
+        showFavorite={false}
+      />,
+    );
+
+    expect(
+      screen.getByRole("link", {
+        name: "View details for Modern Flat, Yaba, Lagos",
+      }),
+    ).toHaveAttribute("href", "/properties/listing-1");
+  });
+
   it("renders the landlord verification badge when available", () => {
     render(
       <PropertyCard

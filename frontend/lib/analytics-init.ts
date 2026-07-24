@@ -5,25 +5,27 @@ import { consentManager } from './consent-manager'
 
 // Initialize analytics system
 export function initializeAnalytics(): void {
-  // Initialize consent manager first
+  // Initialize consent manager
   consentManager.initialize()
   
-  // Check if user has given consent
-  if (consentManager.hasConsent('analytics')) {
-    analytics.initialize()
-  }
-  
-  if (consentManager.hasConsent('performance')) {
-    performanceTracking.startTracking()
-  }
-  
-  // Track initialization
-  if (consentManager.hasConsent('analytics')) {
-    analytics.track('analytics_initialized', {
-      timestamp: Date.now(),
-      consent: consentManager.getPreferences(),
-      version: '1.0.0'
-    })
+  // Check if user has given consent (re-evaluate)
+  const preferences = consentManager.getPreferences()
+  if (preferences.timestamp > 0) {
+    if (preferences.analytics) {
+      analytics.setConsent({ analytics: true })
+      analytics.initialize()
+      
+      // Track initialization
+      analytics.track('analytics_initialized', {
+        timestamp: Date.now(),
+        consent: preferences,
+        version: '1.0.0'
+      })
+    }
+    
+    if (preferences.performance) {
+      performanceTracking.startTracking()
+    }
   }
 }
 
@@ -297,10 +299,35 @@ export function usePerformanceTracking() {
   }
 }
 
-// Auto-initialize on module import
+// Auto-initialize on module import using a non-eager subscription-based gate
 if (typeof globalThis !== 'undefined') {
-  // Initialize analytics system
-  setTimeout(() => {
-    initializeAnalytics()
-  }, 0)
+  // Subscribe to consent state changes to dynamically initialize/revoke trackers
+  consentManager.onConsentChange((preferences) => {
+    if (preferences.analytics) {
+      analytics.setConsent({ analytics: true })
+      analytics.initialize()
+    } else {
+      analytics.setConsent({ analytics: false })
+      analytics.reset()
+    }
+
+    if (preferences.performance) {
+      performanceTracking.startTracking()
+    } else {
+      performanceTracking.stopTracking()
+      performanceTracking.reset()
+    }
+  })
+
+  // Re-apply stored consent preferences on subsequent visits/re-loads
+  const currentPreferences = consentManager.getPreferences()
+  if (currentPreferences.timestamp > 0) {
+    if (currentPreferences.analytics) {
+      analytics.setConsent({ analytics: true })
+      analytics.initialize()
+    }
+    if (currentPreferences.performance) {
+      performanceTracking.startTracking()
+    }
+  }
 }

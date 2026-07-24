@@ -222,6 +222,69 @@ export async function uploadPropertyPhotosBatch(
   });
 }
 
+export async function deleteLandlordProperty(id: string): Promise<void> {
+  return apiFetch<void>(`/api/landlord/properties/${id}`, {
+    method: "DELETE",
+  });
+}
+
+export interface LandlordApplicationDocument {
+  id: string;
+  name: string;
+  type: string;
+  status: "verified" | "pending" | "rejected";
+  url: string;
+}
+
+export interface LandlordApplicationRecord {
+  id: string;
+  listingId: string;
+  tenantId: string;
+  landlordId: string;
+  status: "pending" | "under_review" | "approved" | "rejected" | "withdrawn";
+  coverNote?: string;
+  preferredStartDate: string;
+  paymentPlan: string;
+  appliedAt: string;
+  reviewedAt?: string;
+  reviewerNotes?: string;
+  name?: string;
+  email?: string;
+  phone?: string;
+  applicationDate?: string;
+  employmentStatus?: string;
+  incomeBand?: string;
+  ratingCardScore?: number;
+  ratingCardLink?: string;
+  documents?: LandlordApplicationDocument[];
+  incomeVerificationStatus?: "verified" | "pending" | "rejected";
+  propertyId?: string;
+}
+
+export interface LandlordApplicationsListResponse {
+  applications: LandlordApplicationRecord[];
+  total: number;
+}
+
+export async function listPropertyApplications(
+  listingId: string,
+): Promise<LandlordApplicationsListResponse> {
+  return apiGet<LandlordApplicationsListResponse>(
+    `/api/listings/${listingId}/applications`,
+  );
+}
+
+export async function reviewPropertyApplication(
+  applicationId: string,
+  decision: "approve" | "reject",
+  notes?: string,
+): Promise<LandlordApplicationRecord> {
+  return apiPost<LandlordApplicationRecord>(
+    `/api/applications/${applicationId}/review`,
+    { decision, notes },
+  );
+}
+
 export const MIN_OUTRIGHT_MARGIN_PERCENT = 0.05;
 
 export function computeMarginPreview(

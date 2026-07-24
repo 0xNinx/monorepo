@@ -23,10 +23,17 @@ pub mod validation;
 pub mod formal_properties;
 
 #[contracttype]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Deposit {
+    pub amount: i128,
+    pub timestamp: u64,
+}
+
+#[contracttype]
 #[derive(Clone)]
 pub enum DataKey {
     ContractVersion,
-    /// State schema version used to validate upgrade compatibility (#382)
+    /// State schema version to validate upgrade compatibility (#382)
     StateSchemaVersion,
     Admin,
     Operator,
@@ -36,8 +43,10 @@ pub enum DataKey {
     TotalStaked,
     Paused,
     LockPeriod,
-    /// Per-user stake timestamp in persistent storage (#386 gas optimisation)
-    StakeTimestamp(Address),
+    /// Per-user deposit count in persistent storage
+    DepositCount(Address),
+    /// Individual stake deposits to track lock periods independently
+    Deposit(Address, u32),
     /// Reentrancy lock for cross-contract call protection (#390)
     Reentrancy,
     // ── Upgrade governance (#392) ─────────────────────────────────────────
@@ -194,23 +203,35 @@ fn put_lock_period(env: &Env, period: u64) {
     env.storage().instance().set(&DataKey::LockPeriod, &period);
 }
 
-/// Per-user stake timestamp from persistent storage (#386)
-fn get_stake_timestamp(env: &Env, user: &Address) -> Option<u64> {
+fn get_deposit_count(env: &Env, user: &Address) -> u32 {
     env.storage()
         .persistent()
-        .get::<_, u64>(&DataKey::StakeTimestamp(user.clone()))
+        .get::<_, u32>(&DataKey::DepositCount(user.clone()))
+        .unwrap_or(0)
 }
 
-fn set_stake_timestamp(env: &Env, user: &Address, ts: u64) {
+fn put_deposit_count(env: &Env, user: &Address, count: u32) {
     env.storage()
         .persistent()
-        .set(&DataKey::StakeTimestamp(user.clone()), &ts);
+        .set(&DataKey::DepositCount(user.clone()), &count);
 }
 
-fn remove_stake_timestamp(env: &Env, user: &Address) {
+fn get_deposit(env: &Env, user: &Address, index: u32) -> Option<Deposit> {
     env.storage()
         .persistent()
-        .remove(&DataKey::StakeTimestamp(user.clone()));
+        .get::<_, Deposit>(&DataKey::Deposit(user.clone(), index))
+}
+
+fn put_deposit(env: &Env, user: &Address, index: u32, deposit: Deposit) {
+    env.storage()
+        .persistent()
+        .set(&DataKey::Deposit(user.clone(), index), &deposit);
+}
+
+fn remove_deposit(env: &Env, user: &Address, index: u32) {
+    env.storage()
+        .persistent()
+        .remove(&DataKey::Deposit(user.clone(), index));
 }
 
 /// Reentrancy guard helpers (#390)
@@ -429,36 +450,37 @@ impl StakingPool {
 
     pub fn stake(env: Env, from: Address, amount: i128) -> Result<(), ContractError> {
         require_not_paused(&env)?;
-        // In tests, the invoker (caller) is determined by the first MockAuth entry.
-        // Since we're calling stake(&user, ...), the invoker should be user when no operator is set.
-        // We pass &from as the caller parameter, which should match the invoker in the test setup.
-        // require_user_or_operator already calls user.require_auth() or op.require_auth(), so we don't need from.require_auth() here.
         let _spender = require_user_or_operator(&env, &from, &from)?;
         validation::require_valid_amount(amount)?;
 
-        // #390: reentrancy guard before external token call
         enter_nonreentrant(&env)?;
 
         let token_address = get_token(&env);
         let token_client = token::Client::new(&env, &token_address);
 
-        // Transfer tokens from user to contract
         token_client.transfer(&from, &env.current_contract_address(), &amount);
 
         exit_nonreentrant(&env);
 
-        // #386: per-key persistent storage instead of Map
         let current_balance = get_staked_balance(&env, &from);
         put_staked_balance(&env, &from, current_balance + amount);
 
-        // Update total staked
         let total = get_total_staked(&env);
         put_total_staked(&env, total + amount);
 
-        // Update stake timestamp (new stakes reset the lock timer)
-        set_stake_timestamp(&env, &from, env.ledger().timestamp());
+        // Track this as a separate deposit for independent lock period tracking
+        let count = get_deposit_count(&env, &from);
+        put_deposit(
+            &env,
+            &from,
+            count,
+            Deposit {
+                amount,
+                timestamp: env.ledger().timestamp(),
+            },
+        );
+        put_deposit_count(&env, &from, count + 1);
 
-        // Emit event
         let new_user_balance = current_balance + amount;
         let new_total = total + amount;
         env.events().publish(
@@ -475,55 +497,72 @@ impl StakingPool {
 
     pub fn unstake(env: Env, to: Address, amount: i128) -> Result<(), ContractError> {
         require_not_paused(&env)?;
-        // In tests, the invoker (caller) is determined by the first MockAuth entry.
-        // Since we're calling unstake(&user, ...), the invoker should be user when no operator is set.
-        // We pass &to as the caller parameter, which should match the invoker in the test setup.
-        // require_user_or_operator already calls user.require_auth() or op.require_auth(), so we don't need to.require_auth() here.
         let _spender = require_user_or_operator(&env, &to, &to)?;
         validation::require_valid_amount(amount)?;
 
-        // #386: per-key persistent storage instead of Map
         let current_balance = get_staked_balance(&env, &to);
         if current_balance < amount {
             return Err(ContractError::InsufficientBalance);
         }
 
-        // Check lock period
         let lock_period = get_lock_period(&env);
-        if lock_period > 0 {
-            if let Some(stake_time) = get_stake_timestamp(&env, &to) {
-                let current_time = env.ledger().timestamp();
-                if current_time < stake_time + lock_period {
-                    return Err(ContractError::TokensLocked);
+        let current_time = env.ledger().timestamp();
+        let count = get_deposit_count(&env, &to);
+
+        let mut unlocked_balance = 0i128;
+        for i in 0..count {
+            if let Some(deposit) = get_deposit(&env, &to, i) {
+                if lock_period == 0 || current_time >= deposit.timestamp + lock_period {
+                    unlocked_balance += deposit.amount;
                 }
-            } else {
-                return Err(ContractError::NoStakeTimestamp);
             }
         }
 
-        // Update staked balance
+        if unlocked_balance < amount {
+            env.events().publish(
+                (
+                    Symbol::new(&env, "staking_pool"),
+                    Symbol::new(&env, "unstake_blocked"),
+                    to.clone(),
+                ),
+                (amount, unlocked_balance),
+            );
+            return Err(ContractError::TokensLocked);
+        }
+
+        let mut remaining_to_unstake = amount;
+        for i in 0..count {
+            if remaining_to_unstake == 0 {
+                break;
+            }
+
+            if let Some(mut deposit) = get_deposit(&env, &to, i) {
+                if lock_period == 0 || current_time >= deposit.timestamp + lock_period {
+                    if deposit.amount <= remaining_to_unstake {
+                        remaining_to_unstake -= deposit.amount;
+                        remove_deposit(&env, &to, i);
+                    } else {
+                        deposit.amount -= remaining_to_unstake;
+                        remaining_to_unstake = 0;
+                        put_deposit(&env, &to, i, deposit);
+                    }
+                }
+            }
+        }
+
         let new_balance = current_balance - amount;
         put_staked_balance(&env, &to, new_balance);
 
-        // Clean up stake timestamp if fully unstaked
-        if new_balance == 0 {
-            remove_stake_timestamp(&env, &to);
-        }
-
-        // Update total staked
         let total = get_total_staked(&env);
         put_total_staked(&env, total - amount);
 
         let token_address = get_token(&env);
         let token_client = token::Client::new(&env, &token_address);
 
-        // #390: reentrancy guard before external token call
         enter_nonreentrant(&env)?;
-        // Transfer tokens from contract to user
         token_client.transfer(&env.current_contract_address(), &to, &amount);
         exit_nonreentrant(&env);
 
-        // Emit event
         let new_total = total - amount;
         env.events().publish(
             (
@@ -2270,6 +2309,518 @@ mod test {
             .unwrap_err()
             .unwrap();
         assert_eq!(err, ContractError::InvalidAmount);
+    }
+
+    // ============================================================================
+    // Metadata Hash Integrity Tests (Issue #1248)
+    // ============================================================================
+
+    #[test]
+    fn compute_metadata_hash_is_deterministic() {
+        let env = Env::default();
+        let (_contract_id, client, _admin, user, token_id) = setup_contract(&env);
+
+        env.ledger().set_timestamp(1620000000u64);
+
+        let input = ReceiptInput {
+            tx_type: Symbol::new(&env, "stake"),
+            amount_usdc: 1000000i128,
+            token: token_id,
+            user: user.clone(),
+            timestamp: Some(1620000000u64),
+            deal_id: None,
+            listing_id: None,
+            metadata: None,
+        };
+
+        let hash1 = client
+            .try_compute_metadata_hash(&input.clone())
+            .unwrap()
+            .unwrap();
+        let hash2 = client.try_compute_metadata_hash(&input).unwrap().unwrap();
+
+        assert_eq!(
+            hash1, hash2,
+            "hash should be deterministic for identical input"
+        );
+    }
+
+    #[test]
+    fn compute_metadata_hash_sensitive_to_tx_type() {
+        let env = Env::default();
+        let (_contract_id, client, _admin, user, token_id) = setup_contract(&env);
+
+        env.ledger().set_timestamp(1620000000u64);
+
+        let input1 = ReceiptInput {
+            tx_type: Symbol::new(&env, "stake"),
+            amount_usdc: 1000000i128,
+            token: token_id.clone(),
+            user: user.clone(),
+            timestamp: Some(1620000000u64),
+            deal_id: None,
+            listing_id: None,
+            metadata: None,
+        };
+
+        let input2 = ReceiptInput {
+            tx_type: Symbol::new(&env, "unstake"),
+            amount_usdc: 1000000i128,
+            token: token_id,
+            user: user.clone(),
+            timestamp: Some(1620000000u64),
+            deal_id: None,
+            listing_id: None,
+            metadata: None,
+        };
+
+        let hash1 = client.try_compute_metadata_hash(&input1).unwrap().unwrap();
+        let hash2 = client.try_compute_metadata_hash(&input2).unwrap().unwrap();
+
+        assert_ne!(hash1, hash2, "hash should change when tx_type changes");
+    }
+
+    #[test]
+    fn compute_metadata_hash_sensitive_to_amount() {
+        let env = Env::default();
+        let (_contract_id, client, _admin, user, token_id) = setup_contract(&env);
+
+        env.ledger().set_timestamp(1620000000u64);
+
+        let input1 = ReceiptInput {
+            tx_type: Symbol::new(&env, "stake"),
+            amount_usdc: 1000000i128,
+            token: token_id.clone(),
+            user: user.clone(),
+            timestamp: Some(1620000000u64),
+            deal_id: None,
+            listing_id: None,
+            metadata: None,
+        };
+
+        let input2 = ReceiptInput {
+            tx_type: Symbol::new(&env, "stake"),
+            amount_usdc: 2000000i128,
+            token: token_id,
+            user: user.clone(),
+            timestamp: Some(1620000000u64),
+            deal_id: None,
+            listing_id: None,
+            metadata: None,
+        };
+
+        let hash1 = client.try_compute_metadata_hash(&input1).unwrap().unwrap();
+        let hash2 = client.try_compute_metadata_hash(&input2).unwrap().unwrap();
+
+        assert_ne!(hash1, hash2, "hash should change when amount changes");
+    }
+
+    #[test]
+    fn compute_metadata_hash_sensitive_to_token() {
+        let env = Env::default();
+        let (_contract_id, client, _admin, user, token_id) = setup_contract(&env);
+
+        env.ledger().set_timestamp(1620000000u64);
+
+        let token_admin = Address::generate(&env);
+        let token_contract2 = env.register_stellar_asset_contract_v2(token_admin);
+        let token_id2 = token_contract2.address();
+
+        let input1 = ReceiptInput {
+            tx_type: Symbol::new(&env, "stake"),
+            amount_usdc: 1000000i128,
+            token: token_id.clone(),
+            user: user.clone(),
+            timestamp: Some(1620000000u64),
+            deal_id: None,
+            listing_id: None,
+            metadata: None,
+        };
+
+        let input2 = ReceiptInput {
+            tx_type: Symbol::new(&env, "stake"),
+            amount_usdc: 1000000i128,
+            token: token_id2,
+            user: user.clone(),
+            timestamp: Some(1620000000u64),
+            deal_id: None,
+            listing_id: None,
+            metadata: None,
+        };
+
+        let hash1 = client.try_compute_metadata_hash(&input1).unwrap().unwrap();
+        let hash2 = client.try_compute_metadata_hash(&input2).unwrap().unwrap();
+
+        assert_ne!(
+            hash1, hash2,
+            "hash should change when token address changes"
+        );
+    }
+
+    #[test]
+    fn compute_metadata_hash_sensitive_to_user() {
+        let env = Env::default();
+        let (_contract_id, client, _admin, user, token_id) = setup_contract(&env);
+
+        env.ledger().set_timestamp(1620000000u64);
+
+        let user2 = Address::generate(&env);
+
+        let input1 = ReceiptInput {
+            tx_type: Symbol::new(&env, "stake"),
+            amount_usdc: 1000000i128,
+            token: token_id.clone(),
+            user: user.clone(),
+            timestamp: Some(1620000000u64),
+            deal_id: None,
+            listing_id: None,
+            metadata: None,
+        };
+
+        let input2 = ReceiptInput {
+            tx_type: Symbol::new(&env, "stake"),
+            amount_usdc: 1000000i128,
+            token: token_id,
+            user: user2,
+            timestamp: Some(1620000000u64),
+            deal_id: None,
+            listing_id: None,
+            metadata: None,
+        };
+
+        let hash1 = client.try_compute_metadata_hash(&input1).unwrap().unwrap();
+        let hash2 = client.try_compute_metadata_hash(&input2).unwrap().unwrap();
+
+        assert_ne!(hash1, hash2, "hash should change when user address changes");
+    }
+
+    #[test]
+    fn compute_metadata_hash_sensitive_to_timestamp() {
+        let env = Env::default();
+        let (_contract_id, client, _admin, user, token_id) = setup_contract(&env);
+
+        let input1 = ReceiptInput {
+            tx_type: Symbol::new(&env, "stake"),
+            amount_usdc: 1000000i128,
+            token: token_id.clone(),
+            user: user.clone(),
+            timestamp: Some(1620000000u64),
+            deal_id: None,
+            listing_id: None,
+            metadata: None,
+        };
+
+        let input2 = ReceiptInput {
+            tx_type: Symbol::new(&env, "stake"),
+            amount_usdc: 1000000i128,
+            token: token_id,
+            user: user.clone(),
+            timestamp: Some(1620000001u64),
+            deal_id: None,
+            listing_id: None,
+            metadata: None,
+        };
+
+        let hash1 = client.try_compute_metadata_hash(&input1).unwrap().unwrap();
+        let hash2 = client.try_compute_metadata_hash(&input2).unwrap().unwrap();
+
+        assert_ne!(hash1, hash2, "hash should change when timestamp changes");
+    }
+
+    #[test]
+    fn compute_metadata_hash_sensitive_to_deal_id() {
+        let env = Env::default();
+        let (_contract_id, client, _admin, user, token_id) = setup_contract(&env);
+
+        env.ledger().set_timestamp(1620000000u64);
+
+        let input1 = ReceiptInput {
+            tx_type: Symbol::new(&env, "stake"),
+            amount_usdc: 1000000i128,
+            token: token_id.clone(),
+            user: user.clone(),
+            timestamp: Some(1620000000u64),
+            deal_id: Some(String::from_str(&env, "DEAL001")),
+            listing_id: None,
+            metadata: None,
+        };
+
+        let input2 = ReceiptInput {
+            tx_type: Symbol::new(&env, "stake"),
+            amount_usdc: 1000000i128,
+            token: token_id,
+            user: user.clone(),
+            timestamp: Some(1620000000u64),
+            deal_id: Some(String::from_str(&env, "DEAL002")),
+            listing_id: None,
+            metadata: None,
+        };
+
+        let hash1 = client.try_compute_metadata_hash(&input1).unwrap().unwrap();
+        let hash2 = client.try_compute_metadata_hash(&input2).unwrap().unwrap();
+
+        assert_ne!(hash1, hash2, "hash should change when deal_id changes");
+    }
+
+    #[test]
+    fn compute_metadata_hash_sensitive_to_listing_id() {
+        let env = Env::default();
+        let (_contract_id, client, _admin, user, token_id) = setup_contract(&env);
+
+        env.ledger().set_timestamp(1620000000u64);
+
+        let input1 = ReceiptInput {
+            tx_type: Symbol::new(&env, "stake"),
+            amount_usdc: 1000000i128,
+            token: token_id.clone(),
+            user: user.clone(),
+            timestamp: Some(1620000000u64),
+            deal_id: None,
+            listing_id: Some(String::from_str(&env, "LIST001")),
+            metadata: None,
+        };
+
+        let input2 = ReceiptInput {
+            tx_type: Symbol::new(&env, "stake"),
+            amount_usdc: 1000000i128,
+            token: token_id,
+            user: user.clone(),
+            timestamp: Some(1620000000u64),
+            deal_id: None,
+            listing_id: Some(String::from_str(&env, "LIST002")),
+            metadata: None,
+        };
+
+        let hash1 = client.try_compute_metadata_hash(&input1).unwrap().unwrap();
+        let hash2 = client.try_compute_metadata_hash(&input2).unwrap().unwrap();
+
+        assert_ne!(hash1, hash2, "hash should change when listing_id changes");
+    }
+
+    #[test]
+    fn compute_metadata_hash_sensitive_to_metadata() {
+        let env = Env::default();
+        let (_contract_id, client, _admin, user, token_id) = setup_contract(&env);
+
+        env.ledger().set_timestamp(1620000000u64);
+
+        let mut metadata1 = Map::new(&env);
+        metadata1.set(
+            Symbol::new(&env, "source"),
+            String::from_str(&env, "bank_transfer"),
+        );
+
+        let mut metadata2 = Map::new(&env);
+        metadata2.set(
+            Symbol::new(&env, "source"),
+            String::from_str(&env, "credit_card"),
+        );
+
+        let input1 = ReceiptInput {
+            tx_type: Symbol::new(&env, "stake"),
+            amount_usdc: 1000000i128,
+            token: token_id.clone(),
+            user: user.clone(),
+            timestamp: Some(1620000000u64),
+            deal_id: None,
+            listing_id: None,
+            metadata: Some(metadata1),
+        };
+
+        let input2 = ReceiptInput {
+            tx_type: Symbol::new(&env, "stake"),
+            amount_usdc: 1000000i128,
+            token: token_id,
+            user: user.clone(),
+            timestamp: Some(1620000000u64),
+            deal_id: None,
+            listing_id: None,
+            metadata: Some(metadata2),
+        };
+
+        let hash1 = client.try_compute_metadata_hash(&input1).unwrap().unwrap();
+        let hash2 = client.try_compute_metadata_hash(&input2).unwrap().unwrap();
+
+        assert_ne!(
+            hash1, hash2,
+            "hash should change when metadata content changes"
+        );
+    }
+
+    #[test]
+    fn verify_metadata_hash_accepts_correct_hash() {
+        let env = Env::default();
+        let (_contract_id, client, _admin, user, token_id) = setup_contract(&env);
+
+        env.ledger().set_timestamp(1620000000u64);
+
+        let input = ReceiptInput {
+            tx_type: Symbol::new(&env, "stake"),
+            amount_usdc: 1000000i128,
+            token: token_id,
+            user: user.clone(),
+            timestamp: Some(1620000000u64),
+            deal_id: None,
+            listing_id: None,
+            metadata: None,
+        };
+
+        let hash = client
+            .try_compute_metadata_hash(&input.clone())
+            .unwrap()
+            .unwrap();
+        let verified = client
+            .try_verify_metadata_hash(&input, &hash)
+            .unwrap()
+            .unwrap();
+
+        assert!(verified, "verify should return true for correct hash");
+    }
+
+    #[test]
+    fn verify_metadata_hash_rejects_incorrect_hash() {
+        let env = Env::default();
+        let (_contract_id, client, _admin, user, token_id) = setup_contract(&env);
+
+        env.ledger().set_timestamp(1620000000u64);
+
+        let input = ReceiptInput {
+            tx_type: Symbol::new(&env, "stake"),
+            amount_usdc: 1000000i128,
+            token: token_id,
+            user: user.clone(),
+            timestamp: Some(1620000000u64),
+            deal_id: None,
+            listing_id: None,
+            metadata: None,
+        };
+
+        let wrong_hash = BytesN::from_array(&env, &[0u8; 32]);
+        let verified = client
+            .try_verify_metadata_hash(&input, &wrong_hash)
+            .unwrap()
+            .unwrap();
+
+        assert!(!verified, "verify should return false for incorrect hash");
+    }
+
+    #[test]
+    fn verify_metadata_hash_rejects_hash_from_different_input() {
+        let env = Env::default();
+        let (_contract_id, client, _admin, user, token_id) = setup_contract(&env);
+
+        env.ledger().set_timestamp(1620000000u64);
+
+        let input1 = ReceiptInput {
+            tx_type: Symbol::new(&env, "stake"),
+            amount_usdc: 1000000i128,
+            token: token_id.clone(),
+            user: user.clone(),
+            timestamp: Some(1620000000u64),
+            deal_id: None,
+            listing_id: None,
+            metadata: None,
+        };
+
+        let input2 = ReceiptInput {
+            tx_type: Symbol::new(&env, "unstake"),
+            amount_usdc: 1000000i128,
+            token: token_id,
+            user: user.clone(),
+            timestamp: Some(1620000000u64),
+            deal_id: None,
+            listing_id: None,
+            metadata: None,
+        };
+
+        let hash1 = client.try_compute_metadata_hash(&input1).unwrap().unwrap();
+        let verified = client
+            .try_verify_metadata_hash(&input2, &hash1)
+            .unwrap()
+            .unwrap();
+
+        assert!(!verified, "verify should reject hash from different input");
+    }
+
+    #[test]
+    fn config_change_detectable_via_hash() {
+        let env = Env::default();
+        let (_contract_id, client, _admin, user, token_id) = setup_contract(&env);
+
+        env.ledger().set_timestamp(1620000000u64);
+
+        // Simulate config change by changing deal_id
+        let input_before = ReceiptInput {
+            tx_type: Symbol::new(&env, "stake"),
+            amount_usdc: 1000000i128,
+            token: token_id.clone(),
+            user: user.clone(),
+            timestamp: Some(1620000000u64),
+            deal_id: Some(String::from_str(&env, "DEAL001")),
+            listing_id: None,
+            metadata: None,
+        };
+
+        let input_after = ReceiptInput {
+            tx_type: Symbol::new(&env, "stake"),
+            amount_usdc: 1000000i128,
+            token: token_id,
+            user: user.clone(),
+            timestamp: Some(1620000000u64),
+            deal_id: Some(String::from_str(&env, "DEAL002")),
+            listing_id: None,
+            metadata: None,
+        };
+
+        let hash_before = client
+            .try_compute_metadata_hash(&input_before)
+            .unwrap()
+            .unwrap();
+        let hash_after = client
+            .try_compute_metadata_hash(&input_after)
+            .unwrap()
+            .unwrap();
+
+        assert_ne!(hash_before, hash_after, "hash should detect config change");
+    }
+
+    #[test]
+    fn compute_metadata_hash_no_panic_on_edge_inputs() {
+        let env = Env::default();
+        let (_contract_id, client, _admin, user, token_id) = setup_contract(&env);
+
+        env.ledger().set_timestamp(1620000000u64);
+
+        // Test with empty optional fields
+        let input1 = ReceiptInput {
+            tx_type: Symbol::new(&env, "stake"),
+            amount_usdc: 1i128,
+            token: token_id.clone(),
+            user: user.clone(),
+            timestamp: None,
+            deal_id: None,
+            listing_id: None,
+            metadata: None,
+        };
+
+        let hash1 = client.try_compute_metadata_hash(&input1).unwrap().unwrap();
+        assert_ne!(hash1, BytesN::from_array(&env, &[0u8; 32]));
+
+        // Test with empty metadata map
+        let empty_metadata = Map::new(&env);
+        let input2 = ReceiptInput {
+            tx_type: Symbol::new(&env, "stake"),
+            amount_usdc: 1i128,
+            token: token_id,
+            user: user.clone(),
+            timestamp: Some(1620000000u64),
+            deal_id: None,
+            listing_id: None,
+            metadata: Some(empty_metadata),
+        };
+
+        let hash2 = client.try_compute_metadata_hash(&input2).unwrap().unwrap();
+        assert_ne!(hash2, BytesN::from_array(&env, &[0u8; 32]));
     }
 
     // ============================================================================

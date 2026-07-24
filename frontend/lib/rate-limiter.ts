@@ -3,6 +3,7 @@ interface RateLimitConfig {
   windowMs: number
   skipSuccessfulRequests?: boolean
   skipFailedRequests?: boolean
+  getTime?: () => number
 }
 
 interface RateLimitEntry {
@@ -59,8 +60,12 @@ class RateLimiter {
     }
   }
 
+  private now(): number {
+    return this.config.getTime ? this.config.getTime() : Date.now()
+  }
+
   private cleanup(): void {
-    const now = Date.now()
+    const now = this.now()
     for (const [key, entry] of this.requests.entries()) {
       if (now > entry.resetTime) {
         this.requests.delete(key)
@@ -72,7 +77,7 @@ class RateLimiter {
   checkLimit(identifier: string = 'default'): { allowed: boolean; remaining: number; resetTime: number } {
     this.cleanup()
     
-    const now = Date.now()
+    const now = this.now()
     const entry = this.requests.get(identifier)
 
     if (!entry || now > entry.resetTime) {
@@ -93,7 +98,6 @@ class RateLimiter {
 
     const timeSinceLastRequest = now - entry.lastRequest
     
-    // Check if the window has reset
     if (timeSinceLastRequest >= this.config.windowMs) {
       entry.count = 1
       entry.resetTime = now + this.config.windowMs
@@ -107,7 +111,6 @@ class RateLimiter {
       }
     }
 
-    // Check if limit exceeded
     if (entry.count >= this.config.maxRequests) {
       return {
         allowed: false,
@@ -116,7 +119,6 @@ class RateLimiter {
       }
     }
 
-    // Increment counter
     entry.count++
     entry.lastRequest = now
     this.saveToStorage()
@@ -139,7 +141,7 @@ class RateLimiter {
 
   getStatus(identifier: string = 'default'): { count: number; remaining: number; resetTime: number } {
     const entry = this.requests.get(identifier)
-    const now = Date.now()
+    const now = this.now()
 
     if (!entry || now > entry.resetTime) {
       return {

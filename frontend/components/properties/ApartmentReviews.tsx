@@ -10,6 +10,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { useTranslations } from "next-intl";
 import { mockReviews, type Review } from "@/lib/mockData/reviews";
+import { sanitizeText } from "@/lib/sanitize";
 import { cn } from "@/lib/utils";
 
 interface ApartmentReviewsProps {
@@ -182,16 +183,21 @@ export function ApartmentReviews({ propertyId }: ApartmentReviewsProps) {
         </div>
       ) : (
         <div className="grid gap-4">
-          {filteredAndSortedReviews.map((review) => (
+          {filteredAndSortedReviews.map((review) => {
+            // Reviews are free-text authored by other users — sanitize before
+            // rendering to prevent stored-XSS (see lib/sanitize.ts).
+            const safeUserName = sanitizeText(review.userName);
+            const safeComment = sanitizeText(review.comment);
+            return (
             <Card key={review.id} className="border-3 border-foreground shadow-[4px_4px_0px_0px_rgba(26,26,26,1)] overflow-hidden">
               <CardContent className="p-6">
                 <div className="flex justify-between items-start mb-4">
                   <div className="flex items-center gap-3">
                     <div className="h-10 w-10 border-2 border-foreground bg-secondary flex items-center justify-center font-bold">
-                      {review.userName.charAt(0)}
+                      {safeUserName.charAt(0)}
                     </div>
                     <div>
-                      <p className="font-bold">{review.userName}</p>
+                      <p className="font-bold">{safeUserName}</p>
                       <p className="text-xs text-muted-foreground">{new Date(review.date).toLocaleDateString("en-NG", { dateStyle: 'medium' })}</p>
                     </div>
                   </div>
@@ -209,7 +215,7 @@ export function ApartmentReviews({ propertyId }: ApartmentReviewsProps) {
                     </div>
                   )}
                   <p className="text-sm leading-relaxed text-foreground">
-                    {review.comment}
+                    {safeComment}
                   </p>
                 </div>
 
@@ -223,7 +229,8 @@ export function ApartmentReviews({ propertyId }: ApartmentReviewsProps) {
                 </div>
               </CardContent>
             </Card>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

@@ -9,13 +9,16 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
   InspectionChecklist,
+  inspectionChecklistTemplate,
   type ChecklistCategory,
 } from "./InspectionChecklist";
+import { propertyInspectionApi, type ChecklistItem } from "@/lib/propertyInspectionApi";
 
 interface ReportSubmitFormProps {
   jobId: string;
   propertyTitle: string;
-  onSubmit?: (data: ReportData) => void;
+  onSubmitted?: () => void;
+  onError?: (error: Error) => void;
 }
 
 export interface ReportData {
@@ -27,7 +30,14 @@ export interface ReportData {
   overallCondition: "excellent" | "good" | "fair" | "poor";
 }
 
-export function ReportSubmitForm({ jobId, propertyTitle, onSubmit }: ReportSubmitFormProps) {
+const CONDITION_MAP: Record<string, "A" | "B" | "C" | "D"> = {
+  excellent: "A",
+  good: "B",
+  fair: "C",
+  poor: "D",
+};
+
+export function ReportSubmitForm({ jobId, propertyTitle, onSubmitted, onError }: ReportSubmitFormProps) {
   const [photos, setPhotos] = useState<File[]>([]);
   const [summary, setSummary] = useState("");
   const [recommendations, setRecommendations] = useState("");
@@ -35,17 +45,15 @@ export function ReportSubmitForm({ jobId, propertyTitle, onSubmit }: ReportSubmi
     "excellent" | "good" | "fair" | "poor"
   >("good");
   const [checklist, setChecklist] = useState<ChecklistCategory[]>(
-    () => {
-      const { inspectionChecklistTemplate } = require("@/lib/mockData");
-      return inspectionChecklistTemplate.map((cat: any) => ({
+    () =>
+      inspectionChecklistTemplate.map((cat) => ({
         ...cat,
-        items: cat.items.map((item: any) => ({
+        items: cat.items.map((item) => ({
           ...item,
           completed: false,
           notes: "",
         })),
-      }));
-    }
+      })),
   );
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -62,22 +70,38 @@ export function ReportSubmitForm({ jobId, propertyTitle, onSubmit }: ReportSubmi
     e.preventDefault();
     setIsSubmitting(true);
 
-    const reportData: ReportData = {
-      jobId,
-      checklist,
-      photos,
-      summary,
-      recommendations,
-      overallCondition,
-    };
+    try {
+      const notes = [summary, recommendations].filter(Boolean).join("\n\n");
+      
+      // Convert checklist to the new format
+      const checklistItems: ChecklistItem[] = [];
+      checklist.forEach((cat) => {
+        cat.items.forEach((item) => {
+          checklistItems.push({
+            category: cat.category as 'structural' | 'plumbing' | 'electrical' | 'safety' | 'exterior',
+            item: item.label,
+            result: item.completed ? 'pass' : 'fail',
+            notes: item.notes || undefined,
+          });
+        });
+      });
 
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+      // For now, use placeholder URLs for photos
+      // In production, these would be uploaded to S3/cloud storage
+      const photoUrls = photos.map((f) => `https://placeholder.url/${f.name}`);
 
-    onSubmit?.(reportData);
-    setIsSubmitting(false);
+      await propertyInspectionApi.submitReport(jobId, {
+        checklistItems,
+        photos: photoUrls.map((url) => ({ url })),
+        inspectorNotes: notes,
+      });
 
-    console.log("Inspection report submitted:", reportData);
+      onSubmitted?.();
+    } catch (err) {
+      onError?.(err instanceof Error ? err : new Error("Failed to submit report"));
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const canSubmit = () => {

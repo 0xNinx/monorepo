@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, use, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -10,41 +10,75 @@ import {
   Clock,
   DollarSign,
   FileText,
-  Menu,
-  X,
   CheckCircle,
+  RefreshCw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { DashboardHeader } from "@/components/dashboard-header";
+import { DashboardSidebar } from "@/components/dashboard/DashboardSidebar";
 import { ReportSubmitForm } from "@/components/inspector/ReportSubmitForm";
-import { inspectorJobs } from "@/lib/mockData";
+import { getInspectorJobs, type InspectorJob } from "@/lib/inspectorApi";
+import { useFeatureFlag } from "@/lib/featureFlags";
 
-export default function JobDetailPage({ params }: { params: { jobId: string } }) {
+export default function JobDetailPage({ params }: { params: Promise<{ jobId: string }> }) {
   const router = useRouter();
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const resolvedParams = use(params);
+  const isEnabled = useFeatureFlag("INSPECTOR_DASHBOARD_ENABLED");
   const [isLoading, setIsLoading] = useState(true);
-  const [job, setJob] = useState<any>(null);
+  const [job, setJob] = useState<InspectorJob | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [showReportForm, setShowReportForm] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+
+  const fetchJob = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const jobs = await getInspectorJobs();
+      const found = jobs.find((j) => j.id === resolvedParams.jobId);
+      setJob(found || null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load job");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [resolvedParams.jobId]);
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      const foundJob = inspectorJobs.find((j) => j.id === params.jobId);
-      setJob(foundJob || null);
-      setIsLoading(false);
-    }, 350);
-    return () => clearTimeout(timer);
-  }, [params.jobId]);
+    fetchJob();
+  }, [fetchJob]);
 
-  const handleReportSubmit = (data: any) => {
-    console.log("Report submitted:", data);
-    // Mock API call
-    setTimeout(() => {
-      router.push("/dashboard/inspector");
-    }, 1000);
+  const handleReportSubmitted = () => {
+    router.push("/dashboard/inspector");
   };
+
+  const handleReportError = (err: Error) => {
+    setSubmitError(err.message);
+  };
+
+  if (!isEnabled) {
+    return (
+      <div className="min-h-screen bg-background">
+        <DashboardHeader />
+        <main className="lg:pl-64">
+          <div className="p-6 lg:p-8">
+            <Card className="border-3 border-foreground p-12 text-center shadow-[4px_4px_0px_0px_rgba(26,26,26,1)]">
+              <FileText className="mx-auto h-16 w-16 text-muted-foreground" />
+              <h3 className="mt-4 text-xl font-bold text-foreground">
+                Inspector Dashboard Not Available
+              </h3>
+              <p className="mt-2 text-muted-foreground">
+                The inspector dashboard feature is currently disabled.
+              </p>
+            </Card>
+          </div>
+        </main>
+      </div>
+    );
+  }
 
   if (isLoading) {
     return (
@@ -54,6 +88,38 @@ export default function JobDetailPage({ params }: { params: { jobId: string } })
           <div className="p-6 lg:p-8">
             <Skeleton className="mb-8 h-12 w-48 border-3 border-foreground" />
             <Skeleton className="h-96 border-3 border-foreground" />
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-background">
+        <DashboardHeader />
+        <main className="lg:pl-64">
+          <div className="p-6 lg:p-8">
+            <Link href="/dashboard/inspector">
+              <Button variant="outline" className="mb-6 border-2 border-foreground">
+                <ArrowLeft className="mr-2 h-4 w-4" />
+                Back to Job Board
+              </Button>
+            </Link>
+            <Card className="border-3 border-foreground p-12 text-center shadow-[4px_4px_0px_0px_rgba(26,26,26,1)]">
+              <FileText className="mx-auto h-16 w-16 text-muted-foreground" />
+              <h3 className="mt-4 text-xl font-bold text-foreground">
+                Failed to load job
+              </h3>
+              <p className="mt-2 text-muted-foreground">{error}</p>
+              <Button
+                onClick={fetchJob}
+                className="mt-6 border-3 border-foreground bg-primary shadow-[2px_2px_0px_0px_rgba(26,26,26,1)]"
+              >
+                <RefreshCw className="mr-2 h-4 w-4" />
+                Retry
+              </Button>
+            </Card>
           </div>
         </main>
       </div>
@@ -81,7 +147,7 @@ export default function JobDetailPage({ params }: { params: { jobId: string } })
                 Job Not Found
               </h3>
               <p className="mt-2 text-muted-foreground">
-                The inspection job you're looking for doesn't exist.
+                The inspection job you're looking for doesn't exist or is no longer available.
               </p>
             </Card>
           </div>
@@ -96,63 +162,10 @@ export default function JobDetailPage({ params }: { params: { jobId: string } })
     <div className="min-h-screen bg-background">
       <DashboardHeader />
 
-      {/* Mobile Menu Button */}
-      <button
-        onClick={() => setSidebarOpen(!sidebarOpen)}
-        className="fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center border-3 border-foreground bg-primary shadow-[4px_4px_0px_0px_rgba(26,26,26,1)] lg:hidden"
-      >
-        {sidebarOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
-      </button>
-
-      {/* Mobile Overlay */}
-      {sidebarOpen && (
-        <button
-          type="button"
-          aria-label="Close sidebar"
-          className="fixed inset-0 z-40 bg-foreground/50 lg:hidden"
-          onClick={() => setSidebarOpen(false)}
-        />
-      )}
-
-      {/* Sidebar */}
-      <aside
-        className={`fixed left-0 top-0 z-40 h-screen w-64 border-r-3 border-foreground bg-card pt-20 transition-transform lg:translate-x-0 ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}`}
-      >
-        <div className="flex h-full flex-col px-4 py-6">
-          <div className="mb-8 border-3 border-foreground bg-accent p-4 shadow-[4px_4px_0px_0px_rgba(26,26,26,1)]">
-            <p className="text-sm font-medium text-foreground">Logged in as</p>
-            <p className="text-lg font-bold text-foreground">Inspector Chidi</p>
-            <p className="text-sm text-muted-foreground">Property Inspector</p>
-          </div>
-
-          <nav className="flex-1 space-y-2">
-            <Link
-              href="/dashboard/inspector"
-              className="flex items-center gap-3 rounded-lg border-2 border-transparent px-4 py-3 text-muted-foreground transition-colors hover:border-foreground hover:bg-muted"
-            >
-              <Building2 className="h-5 w-5" />
-              Job Board
-            </Link>
-            <Link
-              href="/dashboard/inspector/earnings"
-              className="flex items-center gap-3 rounded-lg border-2 border-transparent px-4 py-3 text-muted-foreground transition-colors hover:border-foreground hover:bg-muted"
-            >
-              <DollarSign className="h-5 w-5" />
-              Earnings
-            </Link>
-          </nav>
-
-          <div className="mt-auto pt-6">
-            <Link
-              href="/"
-              className="flex items-center gap-3 rounded-lg border-2 border-transparent px-4 py-3 text-muted-foreground transition-colors hover:border-foreground hover:bg-muted"
-            >
-              <Building2 className="h-5 w-5" />
-              Back to Home
-            </Link>
-          </div>
-        </div>
-      </aside>
+      <DashboardSidebar
+        role="inspector"
+        userInfo={{ name: "Inspector Chidi", roleLabel: "Property Inspector" }}
+      />
 
       {/* Main Content */}
       <main className="lg:pl-64">
@@ -175,11 +188,19 @@ export default function JobDetailPage({ params }: { params: { jobId: string } })
           </div>
 
           {showReportForm ? (
-            <ReportSubmitForm
-              jobId={job.id}
-              propertyTitle={job.propertyTitle}
-              onSubmit={handleReportSubmit}
-            />
+            <div className="space-y-4">
+              {submitError && (
+                <div className="rounded-lg border-2 border-destructive bg-destructive/10 p-4 text-sm text-destructive">
+                  {submitError}
+                </div>
+              )}
+              <ReportSubmitForm
+                jobId={job.id}
+                propertyTitle={job.propertyTitle}
+                onSubmitted={handleReportSubmitted}
+                onError={handleReportError}
+              />
+            </div>
           ) : (
             <div className="space-y-6">
               {/* Job Details Card */}

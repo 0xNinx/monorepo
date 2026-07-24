@@ -73,7 +73,7 @@ export const messageThreads: Record<
     senderId: "me" | "other";
     text: string;
     timestamp: string;
-    status: "sent" | "delivered" | "read";
+    status: "sending" | "sent" | "delivered" | "read" | "failed";
     attachment?: { type: "image" | "document"; name: string };
   }>
 > = {

@@ -117,6 +117,8 @@ export default function OnboardingPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
+  const [showResumePrompt, setShowResumePrompt] = useState(false);
+  const [savedStepIndex, setSavedStepIndex] = useState(0);
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const currentStep = STEPS[currentStepIndex];
@@ -135,7 +137,10 @@ export default function OnboardingPage() {
           return;
         }
         const idx = STEPS.findIndex((s) => s.id === status.currentStep);
-        if (idx >= 0) setCurrentStepIndex(idx);
+        if (idx > 0) {
+          setSavedStepIndex(idx);
+          setShowResumePrompt(true);
+        }
       })
       .catch(() => {
         // Not logged in or no draft — start from beginning
@@ -234,6 +239,42 @@ export default function OnboardingPage() {
     } finally {
       setIsSubmitting(false);
     }
+  }
+
+  if (showResumePrompt) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
+        <Card className="max-w-md w-full p-8">
+          <h1 className="text-xl font-bold mb-2">Resume your application?</h1>
+          <p className="text-gray-600 mb-6">
+            You have an application in progress at step{" "}
+            <strong>{STEPS[savedStepIndex]?.label}</strong>. Would you like to
+            continue where you left off, or start over?
+          </p>
+          <div className="flex gap-3">
+            <Button
+              className="bg-blue-600 hover:bg-blue-700"
+              onClick={() => {
+                setCurrentStepIndex(savedStepIndex);
+                setShowResumePrompt(false);
+              }}
+            >
+              Resume
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setFormData(defaultFormData);
+                setCurrentStepIndex(0);
+                setShowResumePrompt(false);
+              }}
+            >
+              Start over
+            </Button>
+          </div>
+        </Card>
+      </div>
+    );
   }
 
   if (submitSuccess) {

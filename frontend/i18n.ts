@@ -11,10 +11,11 @@ export const defaultLocale: Locale = "en";
 export const rtlLocales: Locale[] = ["ar"];
 
 export default getRequestConfig(async ({ locale }) => {
-  // Validate that the incoming `locale` parameter is valid
-  if (!locales.includes(locale as Locale)) notFound();
+  // If no locale is provided or it's invalid, fallback to defaultLocale instead of throwing notFound
+  const activeLocale = locale && locales.includes(locale as Locale) ? locale : defaultLocale;
 
   return {
-    messages: (await import(`./messages/${locale}.json`)).default,
+    locale: activeLocale,
+    messages: (await import(`./messages/${activeLocale}.json`)).default,
   };
 });

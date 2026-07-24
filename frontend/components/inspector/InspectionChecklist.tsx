@@ -6,13 +6,11 @@ import { Card } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { inspectionChecklistTemplate } from "@/lib/mockData";
-
 export interface ChecklistItem {
   id: string;
   label: string;
   required: boolean;
-  completed: boolean;
+  completed?: boolean;
   notes?: string;
 }
 
@@ -21,6 +19,53 @@ export interface ChecklistCategory {
   category: string;
   items: ChecklistItem[];
 }
+
+export const inspectionChecklistTemplate: ChecklistCategory[] = [
+  {
+    id: "exterior",
+    category: "Exterior",
+    items: [
+      { id: "ext-1", label: "Building exterior condition", required: true },
+      { id: "ext-2", label: "Roof condition", required: true },
+      { id: "ext-3", label: "Parking area", required: false },
+      { id: "ext-4", label: "Security features (gates, fences)", required: true },
+    ],
+  },
+  {
+    id: "interior",
+    category: "Interior",
+    items: [
+      { id: "int-1", label: "Living room condition", required: true },
+      { id: "int-2", label: "Kitchen condition and appliances", required: true },
+      { id: "int-3", label: "Bedroom condition", required: true },
+      { id: "int-4", label: "Bathroom condition and fixtures", required: true },
+      { id: "int-5", label: "Flooring condition", required: true },
+      { id: "int-6", label: "Windows and doors", required: true },
+      { id: "int-7", label: "Electrical outlets and switches", required: true },
+      { id: "int-8", label: "Plumbing fixtures", required: true },
+    ],
+  },
+  {
+    id: "amenities",
+    category: "Amenities",
+    items: [
+      { id: "amen-1", label: "Water supply and pressure", required: true },
+      { id: "amen-2", label: "Electrical supply stability", required: true },
+      { id: "amen-3", label: "Air conditioning (if applicable)", required: false },
+      { id: "amen-4", label: "Security systems", required: false },
+    ],
+  },
+  {
+    id: "safety",
+    category: "Safety & Compliance",
+    items: [
+      { id: "safe-1", label: "Fire safety equipment", required: true },
+      { id: "safe-2", label: "Emergency exits", required: true },
+      { id: "safe-3", label: "Ventilation", required: true },
+      { id: "safe-4", label: "Pest control evidence", required: true },
+    ],
+  },
+];
 
 export function InspectionChecklist() {
   const [checklist, setChecklist] = useState<ChecklistCategory[]>(

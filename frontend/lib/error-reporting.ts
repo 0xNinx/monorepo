@@ -1,4 +1,5 @@
 import * as Sentry from "@sentry/nextjs"
+import { redactString } from "./pii-scrubber"
 
 type ErrorReportLevel = 'page' | 'section'
 
@@ -13,7 +14,8 @@ function buildEventId() {
 }
 
 function sanitizeMessage(message: string) {
-  return message.slice(0, 300)
+  const sanitized = message.slice(0, 300)
+  return redactString(sanitized)
 }
 
 export async function reportClientError({

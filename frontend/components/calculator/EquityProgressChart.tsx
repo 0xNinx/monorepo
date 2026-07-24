@@ -11,6 +11,7 @@ import {
   Legend,
 } from "recharts";
 import type { MonthlyEquityPoint } from "@/lib/rentToOwnCalc";
+import { formatCompactNgn, formatNgn } from "@/lib/currency";
 
 interface Props {
   data: MonthlyEquityPoint[];
@@ -18,18 +19,7 @@ interface Props {
 }
 
 function formatShort(val: number): string {
-  if (val >= 1_000_000) return `₦${(val / 1_000_000).toFixed(1)}M`;
-  if (val >= 1_000) return `₦${(val / 1_000).toFixed(0)}K`;
-  return `₦${val}`;
-}
-
-function formatFull(val: number): string {
-  return new Intl.NumberFormat("en-NG", {
-    style: "currency",
-    currency: "NGN",
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(val);
+  return formatCompactNgn(val);
 }
 
 const CustomTooltip = ({ active, payload, label }: any) => {
@@ -48,14 +38,14 @@ const CustomTooltip = ({ active, payload, label }: any) => {
           <span className="w-2.5 h-2.5 bg-primary border border-foreground inline-block" />
           Equity owned:
         </span>
-        <span className="font-bold text-primary">{formatFull(equity)}</span>
+        <span className="font-bold text-primary">{formatNgn(equity)}</span>
       </p>
       <p className="flex justify-between gap-4">
         <span className="flex items-center gap-1.5">
           <span className="w-2.5 h-2.5 bg-destructive border border-foreground inline-block" />
           Rent cost (no equity):
         </span>
-        <span className="font-bold">{formatFull(rentEquivalent)}</span>
+        <span className="font-bold">{formatNgn(rentEquivalent)}</span>
       </p>
     </div>
   );
@@ -146,7 +136,7 @@ export default function EquityProgressChart({ data, propertyPrice }: Props) {
 
       {/* Property value reference line label */}
       <p className="mt-2 text-right font-mono text-[10px] text-muted-foreground">
-        Property value: {formatFull(propertyPrice)}
+        Property value: {formatNgn(propertyPrice)}
       </p>
     </div>
   );

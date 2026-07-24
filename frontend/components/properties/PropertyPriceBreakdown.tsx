@@ -7,6 +7,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { formatNgn } from "@/lib/currency";
 
 interface PriceBreakdownProps {
   outrightPriceNgn?: number | null;
@@ -14,14 +15,6 @@ interface PriceBreakdownProps {
   annualRentNgn: number;
   depositPercentage?: number;
   paymentMonths?: number;
-}
-
-function formatNgn(amount: number) {
-  return new Intl.NumberFormat("en-NG", {
-    style: "currency",
-    currency: "NGN",
-    minimumFractionDigits: 0,
-  }).format(amount);
 }
 
 export default function PropertyPriceBreakdown({
