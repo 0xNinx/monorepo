@@ -3,6 +3,8 @@
  */
 
 import { apiGet, withQuery } from "./apiClient";
+import { formatMoney, type SupportedCurrency } from "./currency";
+import { formatDate as fmtDate, formatDateTime as fmtDateTime } from "./i18n-utils";
 
 export type PayoutStatus =
   | "scheduled" | "processing" | "completed" | "delayed" | "failed" | "on_hold";
@@ -156,9 +158,21 @@ export const PAYOUT_CHANNEL_LABELS: Record<PayoutChannel, string> = {
 };
 
 export function formatCurrency(amount: number, currency: string = "NGN"): string {
-  if (currency === "NGN") return `₦${amount.toLocaleString("en-NG", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-  if (currency === "USDC") return `$${amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  if (currency === "NGN" || currency === "USDC") {
+    return formatMoney(amount, currency as SupportedCurrency);
+  }
   return `${currency} ${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+export function formatPayoutDate(date: string | Date): string {
+  return fmtDate(date, "en", { year: "numeric", month: "short", day: "numeric" });
+}
+
+export function formatPayoutDateTime(date: string | Date): string {
+  return fmtDateTime(date, "en", {
+    year: "numeric", month: "short", day: "numeric",
+    hour: "2-digit", minute: "2-digit",
+  });
 }
 
 export function formatPeriodLabel(label: string): string {
