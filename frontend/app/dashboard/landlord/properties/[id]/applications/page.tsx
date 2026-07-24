@@ -217,6 +217,9 @@ export default function PropertyApplicationsPage() {
               </div>
             </>
           )}
+        </div>
+      </main>
+
       <ApplicantDetailDrawer
         applicant={selectedApplicant}
         open={drawerOpen}
