@@ -241,8 +241,9 @@ describe('DataRetentionService', () => {
 
     it('matches purge eligibility - count reflects purgable records', async () => {
       // Same data shape in both functions should yield matching counts
-      const cutoffDate = new Date()
-      cutoffDate.setFullYear(cutoffDate.getFullYear() - 7)
+      const now = new Date('2025-01-15T12:00:00.000Z')
+      vi.useFakeTimers({ now })
+      const cutoffDate = new Date('2018-01-15T12:00:00.000Z')
 
       mockQuery.mockResolvedValue({ rows: [{ count: '4' }], rowCount: 0 } as any)
 
@@ -253,6 +254,7 @@ describe('DataRetentionService', () => {
       // Verify cutoff date matches retention period
       const queryCall = mockQuery.mock.calls[0]!
       expect(queryCall[1][0]).toEqual(cutoffDate)
+      vi.useRealTimers()
     })
 
     it('returns zero for tables with no pending purge records', async () => {

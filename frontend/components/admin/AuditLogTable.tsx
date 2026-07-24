@@ -1,9 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { Fragment, useState } from "react";
+import { useLocale } from "next-intl";
 import { ChevronDown, ChevronRight, ChevronLeft, ChevronRight as ChevronRightIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { formatDateTime } from "@/lib/i18n-utils";
+import type { Locale } from "@/i18n";
 import type { AuditLogEntry, AuditLogPagination } from "@/lib/auditLogsApi";
 
 interface AuditLogTableProps {
@@ -42,6 +45,7 @@ function ExpandedDetail({ entry }: { readonly entry: AuditLogEntry }) {
 }
 
 export function AuditLogTable({ entries, pagination, onPageChange }: AuditLogTableProps) {
+  const locale = useLocale();
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   function toggleRow(id: string) {
@@ -51,16 +55,19 @@ export function AuditLogTable({ entries, pagination, onPageChange }: AuditLogTab
   return (
     <div className="rounded-lg border shadow-sm overflow-hidden">
       <div className="overflow-x-auto">
-        <table className="w-full text-sm">
+        <table className="w-full text-sm" aria-label="Audit log entries">
+          <caption className="sr-only">
+            Audit log — page {pagination.page} of {pagination.totalPages || 1}, {pagination.total} total entries
+          </caption>
           <thead>
             <tr className="border-b bg-muted/50 text-left">
-              <th className="w-8 px-4 py-3" />
-              <th className="px-4 py-3 font-semibold">Timestamp</th>
-              <th className="px-4 py-3 font-semibold">Actor</th>
-              <th className="px-4 py-3 font-semibold">Action</th>
-              <th className="px-4 py-3 font-semibold">Resource Type</th>
-              <th className="px-4 py-3 font-semibold">Resource ID</th>
-              <th className="px-4 py-3 font-semibold">Result</th>
+              <th scope="col" className="w-8 px-4 py-3" aria-label="Expand row" />
+              <th scope="col" className="px-4 py-3 font-semibold">Timestamp</th>
+              <th scope="col" className="px-4 py-3 font-semibold">Actor</th>
+              <th scope="col" className="px-4 py-3 font-semibold">Action</th>
+              <th scope="col" className="px-4 py-3 font-semibold">Resource Type</th>
+              <th scope="col" className="px-4 py-3 font-semibold">Resource ID</th>
+              <th scope="col" className="px-4 py-3 font-semibold">Result</th>
             </tr>
           </thead>
           <tbody>
@@ -74,22 +81,30 @@ export function AuditLogTable({ entries, pagination, onPageChange }: AuditLogTab
               entries.map((entry) => {
                 const isExpanded = expandedId === entry.id;
                 return (
-                  <>
+                  <Fragment key={entry.id}>
                     <tr
-                      key={entry.id}
-                      className="cursor-pointer border-b transition-colors hover:bg-muted/40"
+                      className="cursor-pointer border-b transition-colors hover:bg-muted/40 focus-within:bg-muted/40"
                       onClick={() => toggleRow(entry.id)}
-                      aria-expanded={isExpanded}
                     >
                       <td className="px-4 py-3 text-muted-foreground">
-                        {isExpanded ? (
-                          <ChevronDown className="h-4 w-4" />
-                        ) : (
-                          <ChevronRight className="h-4 w-4" />
-                        )}
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); toggleRow(entry.id); }}
+                          aria-expanded={isExpanded}
+                          aria-label={isExpanded ? "Collapse details" : "Expand details"}
+                          className="flex items-center justify-center rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        >
+                          {isExpanded ? (
+                            <ChevronDown className="h-4 w-4" />
+                          ) : (
+                            <ChevronRight className="h-4 w-4" />
+                          )}
+                        </button>
                       </td>
                       <td className="px-4 py-3 font-mono text-xs whitespace-nowrap text-muted-foreground">
-                        {new Date(entry.createdAt).toLocaleString()}
+                        <time dateTime={entry.createdAt}>
+                          {formatDateTime(entry.createdAt, locale as Locale)}
+                        </time>
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex flex-col gap-0.5">
@@ -114,8 +129,8 @@ export function AuditLogTable({ entries, pagination, onPageChange }: AuditLogTab
                         <ResultBadge result={entry.result} />
                       </td>
                     </tr>
-                    {isExpanded && <ExpandedDetail key={`${entry.id}-detail`} entry={entry} />}
-                  </>
+                    {isExpanded && <ExpandedDetail entry={entry} />}
+                  </Fragment>
                 );
               })
             )}
@@ -133,7 +148,7 @@ export function AuditLogTable({ entries, pagination, onPageChange }: AuditLogTab
                 pagination.total,
               )} of ${pagination.total}`}
         </p>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2" role="navigation" aria-label="Pagination">
           <Button
             variant="outline"
             size="sm"
@@ -143,7 +158,7 @@ export function AuditLogTable({ entries, pagination, onPageChange }: AuditLogTab
           >
             <ChevronLeft className="h-4 w-4" />
           </Button>
-          <span className="text-xs text-muted-foreground">
+          <span className="text-xs text-muted-foreground" aria-live="polite">
             Page {pagination.page} of {pagination.totalPages || 1}
           </span>
           <Button

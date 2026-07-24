@@ -161,6 +161,22 @@ export function AuditLogFilters({ filters, onFiltersChange }: AuditLogFiltersPro
           </Select>
         </div>
 
+        {/* Resource ID text search */}
+        <div className="flex min-w-[200px] flex-1 flex-col gap-1.5">
+          <Label htmlFor="resource-id-input" className="text-xs font-medium">
+            Resource ID
+          </Label>
+          <Input
+            id="resource-id-input"
+            placeholder="Filter by resource ID"
+            value={filters.resourceId ?? ""}
+            onChange={(e) =>
+              update({ resourceId: e.target.value.trim() || undefined })
+            }
+            className="h-9 text-sm"
+          />
+        </div>
+
         {/* Date range: start */}
         <div className="flex min-w-[160px] flex-col gap-1.5">
           <Label htmlFor="start-date-input" className="text-xs font-medium">
