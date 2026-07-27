@@ -4,12 +4,17 @@ import express from 'express'
 import { createMessagingRouter } from './messaging.js'
 import { conversationStore } from '../models/conversationStore.js'
 import { errorHandler } from '../middleware/errorHandler.js'
+import * as messageNotificationService from '../services/messageNotificationService.js'
 
 vi.mock('../middleware/auth.js', () => ({
   authenticateToken: (req: any, _res: any, next: any) => {
     req.user = { id: req.headers['x-user-id'] || 'test-user' }
     next()
   },
+}))
+
+vi.mock('../services/messageNotificationService.js', () => ({
+  queueMessageNotificationsSafely: vi.fn().mockResolvedValue(undefined),
 }))
 
 function createTestApp() {
@@ -133,6 +138,26 @@ describe('Messaging API', () => {
         .set('x-user-id', 'user-c')
         .send({ body: 'Hello!' })
         .expect(404)
+    })
+
+    it('still sends the message when notification queueing fails', async () => {
+      vi.mocked(
+        messageNotificationService.queueMessageNotificationsSafely,
+      ).mockRejectedValueOnce(new Error('queue failed'))
+
+      const conv = await request(app)
+        .post('/api/messaging/conversations')
+        .set('x-user-id', userA)
+        .send({ participantIds: [userB] })
+
+      const res = await request(app)
+        .post(`/api/messaging/conversations/${conv.body.data.id}/messages`)
+        .set('x-user-id', userA)
+        .send({ body: 'Hello despite notification failure' })
+        .expect(201)
+
+      expect(res.body.success).toBe(true)
+      expect(res.body.data.body).toBe('Hello despite notification failure')
     })
   })
 
