@@ -189,7 +189,9 @@ export interface CreateDisputeRequest {
 }
 
 export async function getMyDisputes(): Promise<{ disputes: PaymentDispute[] }> {
-  return apiGet<{ disputes: PaymentDispute[] }>("/api/tenant/payments/disputes");
+  return apiGet<{ disputes: PaymentDispute[] }>(
+    "/api/tenant/payments/disputes",
+  );
 }
 
 export async function createDispute(
@@ -267,5 +269,85 @@ export async function initiateWalletTopUp(
   return apiPost<WalletTopUpResponse>(
     "/api/tenant/payments/wallet/topup",
     data,
+  );
+}
+
+// ── Tenant Lease API Functions ─────────────────────────────────────────────
+
+export interface TenantLeaseDetails {
+  dealId: string;
+  property: {
+    title: string;
+    address: string;
+    beds: number;
+    baths: number;
+    sqm: number;
+  };
+  lease: {
+    startDate: string;
+    endDate: string;
+    duration: string;
+    monthlyPayment: number;
+    status: string;
+  };
+  landlord: {
+    name: string;
+    company?: string;
+    phone: string;
+    email: string;
+  };
+  paymentProgress: {
+    totalPaid: number;
+    totalOwed: number;
+    paymentsCompleted: number;
+    totalPayments: number;
+  };
+}
+
+export interface TenantLeaseDocument {
+  id: string;
+  name: string;
+  date: string;
+  type: string;
+  size: string;
+  status: string;
+  url?: string;
+}
+
+export interface TenantCurrentLease {
+  dealId: string;
+  property: string;
+  location: string;
+  monthlyPayment: number;
+  nextPaymentDate: string;
+  leaseEnd: string;
+  totalPaid: number;
+  totalOwed: number;
+  progress: number;
+  landlord: { name: string };
+}
+
+export async function getTenantCurrentLease(): Promise<{
+  success: boolean;
+  data: TenantCurrentLease;
+}> {
+  return apiGet<{ success: boolean; data: TenantCurrentLease }>(
+    "/api/tenant/lease/current",
+  );
+}
+
+export async function getTenantLeaseDetails(
+  dealId: string,
+): Promise<{ success: boolean; data: TenantLeaseDetails }> {
+  return apiGet<{ success: boolean; data: TenantLeaseDetails }>(
+    `/api/tenant/deals/${dealId}/lease`,
+  );
+}
+
+export async function getTenantLeaseDocuments(
+  dealId: string,
+): Promise<{ success: boolean; data: TenantLeaseDocument[] }> {
+  return apiGet<{ success: boolean; data: TenantLeaseDocument[] }>(
+    `/api/tenant/deals/${dealId}/documents`,
   );
 }

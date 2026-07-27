@@ -17,12 +17,12 @@ import {
   X,
   Briefcase,
   AlertCircle,
+  Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { DashboardHeader } from "@/components/dashboard-header";
 import { DashboardSidebar } from "@/components/dashboard/DashboardSidebar";
-import { leaseDetails, tenantDealId } from "@/lib/mockData/leaseData";
 import {
   searchEmployers,
   updateDealRepayment,
@@ -30,15 +30,35 @@ import {
   type EmployerSearchResult,
 } from "@/lib/employersApi";
 import {
-  leaseAgreement,
-  propertyInspectionReport,
-  paymentSchedule,
-  houseRules,
-} from "@/lib/mockData/documents";
+  getTenantCurrentLease,
+  getTenantLeaseDetails,
+  getTenantLeaseDocuments,
+  type TenantLeaseDetails,
+  type TenantLeaseDocument,
+} from "@/lib/tenantApi";
 
 const DEDUCTION_DAYS = Array.from({ length: 28 }, (_, i) => i + 1);
 
+interface DocWithContent extends TenantLeaseDocument {
+  content?: {
+    sections: Array<{
+      title: string;
+      content?: string;
+      items?: string[];
+    }>;
+  };
+}
+
 export default function TenantLeasePage() {
+  const [leaseDetails, setLeaseDetails] = useState<TenantLeaseDetails | null>(
+    null,
+  );
+  const [documents, setDocuments] = useState<TenantLeaseDocument[]>([]);
+  const [dealId, setDealId] = useState<string | null>(null);
+
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
   const [repaymentMethod, setRepaymentMethod] =
     useState<RepaymentMethod>("self_pay");
   const [employerQuery, setEmployerQuery] = useState("");
@@ -53,16 +73,37 @@ export default function TenantLeasePage() {
   const [repaymentError, setRepaymentError] = useState<string | null>(null);
   const [repaymentSaved, setRepaymentSaved] = useState(false);
 
-  const [selectedDocument, setSelectedDocument] = useState<
-    | typeof leaseAgreement
-    | typeof propertyInspectionReport
-    | typeof paymentSchedule
-    | typeof houseRules
-    | null
-  >(null);
+  const [selectedDocument, setSelectedDocument] =
+    useState<DocWithContent | null>(null);
 
   useEffect(() => {
-    if (repaymentMethod !== "salary_deduction" || employerQuery.trim().length < 2) {
+    setLoading(true);
+    getTenantCurrentLease()
+      .then((res) => {
+        const currentDealId = res.data.dealId;
+        setDealId(currentDealId);
+        return Promise.all([
+          getTenantLeaseDetails(currentDealId),
+          getTenantLeaseDocuments(currentDealId),
+        ]);
+      })
+      .then(([detailsRes, docsRes]) => {
+        setLeaseDetails(detailsRes.data);
+        setDocuments(docsRes.data);
+        setError(null);
+      })
+      .catch((err) => {
+        console.error("Failed to load lease:", err);
+        setError(err instanceof Error ? err.message : "Failed to load lease");
+      })
+      .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => {
+    if (
+      repaymentMethod !== "salary_deduction" ||
+      employerQuery.trim().length < 2
+    ) {
       setEmployerResults([]);
       return;
     }
@@ -75,14 +116,17 @@ export default function TenantLeasePage() {
   }, [employerQuery, repaymentMethod]);
 
   const saveRepaymentMethod = useCallback(async () => {
+    if (!dealId) return;
+
     setRepaymentSaving(true);
     setRepaymentError(null);
     setRepaymentSaved(false);
     try {
-      await updateDealRepayment(tenantDealId, {
+      await updateDealRepayment(dealId, {
         repaymentMethod,
         employerId: selectedEmployer?.id,
-        employeeId: repaymentMethod === "salary_deduction" ? employeeId : undefined,
+        employeeId:
+          repaymentMethod === "salary_deduction" ? employeeId : undefined,
         deductionDay:
           repaymentMethod === "salary_deduction" ? deductionDay : undefined,
       });
@@ -94,7 +138,7 @@ export default function TenantLeasePage() {
     } finally {
       setRepaymentSaving(false);
     }
-  }, [repaymentMethod, selectedEmployer, employeeId, deductionDay]);
+  }, [dealId, repaymentMethod, selectedEmployer, employeeId, deductionDay]);
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat("en-NG", {
@@ -104,25 +148,55 @@ export default function TenantLeasePage() {
     }).format(amount);
   };
 
-  const progressPercentage =
-    (leaseDetails.paymentProgress.totalPaid /
-      leaseDetails.paymentProgress.totalOwed) *
-    100;
+  const progressPercentage = leaseDetails
+    ? (leaseDetails.paymentProgress.totalPaid /
+        leaseDetails.paymentProgress.totalOwed) *
+      100
+    : 0;
 
-  const getDocumentObject = (docName: string) => {
-    switch (docName) {
-      case "Lease Agreement":
-        return leaseAgreement;
-      case "Property Inspection Report":
-        return propertyInspectionReport;
-      case "Payment Schedule":
-        return paymentSchedule;
-      case "House Rules":
-        return houseRules;
-      default:
-        return null;
-    }
-  };
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background">
+        <DashboardHeader />
+        <DashboardSidebar
+          role="tenant"
+          userInfo={{ name: "Ngozi Adekunle", roleLabel: "Tenant" }}
+        />
+        <main className="lg:ml-64 min-h-screen pt-20">
+          <div className="p-8 flex items-center justify-center">
+            <Loader2 className="h-12 w-12 animate-spin" />
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  if (error || !leaseDetails || !dealId) {
+    return (
+      <div className="min-h-screen bg-background">
+        <DashboardHeader />
+        <DashboardSidebar
+          role="tenant"
+          userInfo={{ name: "Ngozi Adekunle", roleLabel: "Tenant" }}
+        />
+        <main className="lg:ml-64 min-h-screen pt-20">
+          <div className="p-8">
+            <Card className="border-3 border-foreground bg-destructive/10 p-6">
+              <div className="flex items-start gap-3">
+                <AlertCircle className="h-5 w-5 shrink-0 text-destructive" />
+                <div>
+                  <p className="font-bold">No active lease</p>
+                  <p className="text-sm text-muted-foreground">
+                    {error || "You don't have an active lease at the moment"}
+                  </p>
+                </div>
+              </div>
+            </Card>
+          </div>
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -133,10 +207,8 @@ export default function TenantLeasePage() {
         userInfo={{ name: "Ngozi Adekunle", roleLabel: "Tenant" }}
       />
 
-      {/* Main Content */}
       <main className="lg:ml-64 min-h-screen pt-20">
         <div className="p-8">
-          {/* Header */}
           <div className="mb-8 flex items-center justify-between">
             <div>
               <h1 className="text-3xl font-bold text-foreground">My Lease</h1>
@@ -151,7 +223,6 @@ export default function TenantLeasePage() {
           </div>
 
           <div className="grid gap-6 lg:grid-cols-3">
-            {/* Property Details */}
             <div className="lg:col-span-2 space-y-6">
               <Card className="border-3 border-foreground p-6 shadow-[4px_4px_0px_0px_rgba(26,26,26,1)]">
                 <h3 className="mb-4 text-lg font-bold">Property Details</h3>
@@ -180,7 +251,6 @@ export default function TenantLeasePage() {
                 </div>
               </Card>
 
-              {/* Lease Terms */}
               <Card className="border-3 border-foreground p-6 shadow-[4px_4px_0px_0px_rgba(26,26,26,1)]">
                 <h3 className="mb-4 text-lg font-bold">Lease Terms</h3>
                 <div className="grid gap-4 md:grid-cols-2">
@@ -190,7 +260,9 @@ export default function TenantLeasePage() {
                       <span className="text-sm">Start Date</span>
                     </div>
                     <p className="mt-1 font-bold">
-                      {leaseDetails.lease.startDate}
+                      {new Date(
+                        leaseDetails.lease.startDate,
+                      ).toLocaleDateString()}
                     </p>
                   </div>
                   <div className="border-3 border-foreground bg-muted/50 p-4">
@@ -199,7 +271,9 @@ export default function TenantLeasePage() {
                       <span className="text-sm">End Date</span>
                     </div>
                     <p className="mt-1 font-bold">
-                      {leaseDetails.lease.endDate}
+                      {new Date(
+                        leaseDetails.lease.endDate,
+                      ).toLocaleDateString()}
                     </p>
                   </div>
                   <div className="border-3 border-foreground bg-muted/50 p-4">
@@ -251,7 +325,6 @@ export default function TenantLeasePage() {
                 </div>
               </Card>
 
-              {/* Repayment Method */}
               <Card className="border-3 border-foreground p-6 shadow-[4px_4px_0px_0px_rgba(26,26,26,1)]">
                 <h3 className="mb-4 flex items-center gap-2 text-lg font-bold">
                   <Briefcase className="h-5 w-5" />
@@ -400,11 +473,10 @@ export default function TenantLeasePage() {
                 </Button>
               </Card>
 
-              {/* Documents */}
               <Card className="border-3 border-foreground p-6 shadow-[4px_4px_0px_0px_rgba(26,26,26,1)]">
                 <h3 className="mb-4 text-lg font-bold">Lease Documents</h3>
                 <div className="space-y-3">
-                  {leaseDetails.documents.map((doc) => (
+                  {documents.map((doc) => (
                     <div
                       key={doc.id}
                       className="flex w-full items-center justify-between border-3 border-foreground bg-card p-4 text-left transition-all hover:bg-muted"
@@ -412,9 +484,7 @@ export default function TenantLeasePage() {
                       <button
                         type="button"
                         className="flex flex-1 items-center gap-4 text-left"
-                        onClick={() =>
-                          setSelectedDocument(getDocumentObject(doc.name))
-                        }
+                        onClick={() => setSelectedDocument(doc)}
                       >
                         <div className="flex h-10 w-10 items-center justify-center border-2 border-foreground bg-muted shrink-0">
                           <FileText className="h-5 w-5" />
@@ -422,32 +492,33 @@ export default function TenantLeasePage() {
                         <div className="flex-1">
                           <p className="font-bold">{doc.name}</p>
                           <p className="text-xs text-muted-foreground">
-                            {doc.date} · {doc.size} · {doc.status}
+                            {new Date(doc.date).toLocaleDateString()} ·{" "}
+                            {doc.size} · {doc.status}
                           </p>
                         </div>
                       </button>
                       <Button
                         className="border-2 border-foreground bg-primary px-4 py-2 font-bold shadow-[2px_2px_0px_0px_rgba(26,26,26,1)] transition-all hover:translate-x-px hover:translate-y-px hover:shadow-[1px_1px_0px_0px_rgba(26,26,26,1)]"
-                        onClick={() =>
-                          setSelectedDocument(getDocumentObject(doc.name))
-                        }
+                        onClick={() => {
+                          if (doc.url) {
+                            window.open(doc.url, "_blank");
+                          }
+                        }}
                       >
-                        <FileText className="mr-2 h-4 w-4" />
-                        View
+                        <Download className="mr-2 h-4 w-4" />
+                        Download
                       </Button>
                     </div>
                   ))}
                 </div>
               </Card>
 
-              {/* Document Viewer Modal */}
               {selectedDocument && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
                   <div className="max-h-[90vh] max-w-2xl w-full overflow-y-auto border-3 border-foreground bg-card shadow-[8px_8px_0px_0px_rgba(26,26,26,1)]">
-                    {/* Modal Header */}
                     <div className="sticky top-0 border-b-3 border-foreground bg-card px-6 py-4 flex items-center justify-between">
                       <h2 className="text-xl font-bold">
-                        {selectedDocument.title}
+                        {selectedDocument.name}
                       </h2>
                       <button
                         onClick={() => setSelectedDocument(null)}
@@ -457,13 +528,15 @@ export default function TenantLeasePage() {
                       </button>
                     </div>
 
-                    {/* Modal Content */}
                     <div className="p-6 space-y-6">
-                      {/* Document Info */}
                       <div className="flex flex-wrap gap-4 text-sm font-bold border-b-2 border-dashed border-foreground pb-4">
                         <div>
                           <p className="text-xs text-muted-foreground">Date</p>
-                          <p>{selectedDocument.date}</p>
+                          <p>
+                            {new Date(
+                              selectedDocument.date,
+                            ).toLocaleDateString()}
+                          </p>
                         </div>
                         <div>
                           <p className="text-xs text-muted-foreground">Size</p>
@@ -479,45 +552,22 @@ export default function TenantLeasePage() {
                         </div>
                       </div>
 
-                      {/* Document Sections */}
                       <div className="space-y-6">
-                        {selectedDocument.content.sections.map(
-                          (section) => (
-                            <div
-                              key={section.title}
-                              className="border-l-4 border-primary pl-4"
-                            >
-                              <h3 className="font-bold text-lg mb-2">
-                                {section.title}
-                              </h3>
-                              {"content" in section && section.content && (
-                                <p className="text-sm text-muted-foreground leading-relaxed mb-3">
-                                  {section.content}
-                                </p>
-                              )}
-                              {"items" in section && section.items && (
-                                <ul className="space-y-2">
-                                  {section.items.map((item) => (
-                                    <li
-                                      key={`${section.title}:${item}`}
-                                      className="flex gap-3 text-sm text-muted-foreground"
-                                    >
-                                      <span className="font-bold text-primary">
-                                        •
-                                      </span>
-                                      <span>{item}</span>
-                                    </li>
-                                  ))}
-                                </ul>
-                              )}
-                            </div>
-                          ),
-                        )}
+                        <p className="text-muted-foreground">
+                          Document preview not available. Please download to
+                          view full content.
+                        </p>
                       </div>
 
-                      {/* Modal Footer */}
                       <div className="border-t-3 border-foreground pt-4 flex gap-3">
-                        <Button className="flex-1 border-2 border-foreground bg-primary py-3 font-bold shadow-[3px_3px_0px_0px_rgba(26,26,26,1)] transition-all hover:translate-x-px hover:translate-y-px hover:shadow-[2px_2px_0px_0px_rgba(26,26,26,1)]">
+                        <Button
+                          className="flex-1 border-2 border-foreground bg-primary py-3 font-bold shadow-[3px_3px_0px_0px_rgba(26,26,26,1)] transition-all hover:translate-x-px hover:translate-y-px hover:shadow-[2px_2px_0px_0px_rgba(26,26,26,1)]"
+                          onClick={() => {
+                            if (selectedDocument.url) {
+                              window.open(selectedDocument.url, "_blank");
+                            }
+                          }}
+                        >
                           <Download className="mr-2 h-4 w-4" />
                           Download PDF
                         </Button>
@@ -534,9 +584,7 @@ export default function TenantLeasePage() {
               )}
             </div>
 
-            {/* Contact Cards */}
             <div className="space-y-6">
-              {/* Landlord */}
               <Card className="border-3 border-foreground p-6 shadow-[4px_4px_0px_0px_rgba(26,26,26,1)]">
                 <h3 className="mb-4 text-lg font-bold">Landlord</h3>
                 <div className="mb-4 flex items-center gap-4">
@@ -545,9 +593,11 @@ export default function TenantLeasePage() {
                   </div>
                   <div>
                     <p className="font-bold">{leaseDetails.landlord.name}</p>
-                    <p className="text-sm text-muted-foreground">
-                      {leaseDetails.landlord.company}
-                    </p>
+                    {leaseDetails.landlord.company && (
+                      <p className="text-sm text-muted-foreground">
+                        {leaseDetails.landlord.company}
+                      </p>
+                    )}
                   </div>
                 </div>
                 <div className="space-y-2 border-t-2 border-foreground pt-4">
@@ -562,7 +612,6 @@ export default function TenantLeasePage() {
                 </div>
               </Card>
 
-              {/* Need Help */}
               <Card className="border-3 border-foreground bg-accent/30 p-6 shadow-[4px_4px_0px_0px_rgba(26,26,26,1)]">
                 <h3 className="mb-2 font-bold">Need Help?</h3>
                 <p className="mb-4 text-sm text-muted-foreground">

@@ -7,7 +7,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import type { UserRentalApplication } from "@/lib/mockData/userDashboard";
+import type { UserRentalApplication } from "@/lib/types/dashboard";
 
 function formatDate(iso: string) {
   const d = new Date(iso);
@@ -53,7 +53,9 @@ export function ApplicationsTable({
             <TableRow key={app.id}>
               <TableCell className="font-mono font-bold">{app.id}</TableCell>
               <TableCell>
-                <div className="font-bold text-foreground">{app.property.title}</div>
+                <div className="font-bold text-foreground">
+                  {app.property.title}
+                </div>
                 <div className="text-xs text-muted-foreground">
                   {app.property.location}
                 </div>
