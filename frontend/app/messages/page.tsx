@@ -22,6 +22,9 @@ import {
   AlertCircle,
   Loader2,
   RefreshCw,
+  X,
+  Upload,
+  Download,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -35,6 +38,13 @@ import {
 import { conversations, messageThreads } from "@/lib/mockData";
 import useAuthStore from "@/store/useAuthStore";
 import { sanitizeText } from "@/lib/sanitize";
+import {
+  validateFileForUpload,
+  uploadAttachment,
+  uploadAttachmentToPresignedUrl,
+  requestAttachmentUploadUrl,
+} from "@/lib/api/messaging";
+import type { AttachmentUploadResult } from "@/lib/types/messaging";
 
 type Message = {
   id: number;
@@ -43,6 +53,14 @@ type Message = {
   timestamp: string;
   status: "sending" | "sent" | "delivered" | "read" | "failed";
   attachment?: { type: "image" | "document"; name: string };
+};
+
+type UploadState = {
+  file: File;
+  progress: number;
+  status: "pending" | "uploading" | "done" | "error";
+  error?: string;
+  result?: AttachmentUploadResult;
 };
 
 export default function MessagesPage() {
@@ -64,6 +82,9 @@ export default function MessagesPage() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [isSending, setIsSending] = useState(false);
   const [isLoadingThread, setIsLoadingThread] = useState(false);
+  const [uploadState, setUploadState] = useState<UploadState | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const uploadAbortRef = useRef<AbortController | null>(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -89,27 +110,127 @@ export default function MessagesPage() {
     throw new Error("Send failed");
   }, []);
 
+  const handleFileSelect = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const validation = validateFileForUpload(file);
+    if (!validation.valid) {
+      setUploadState({
+        file,
+        progress: 0,
+        status: "error",
+        error: validation.error,
+      });
+      return;
+    }
+
+    setUploadState({
+      file,
+      progress: 0,
+      status: "pending",
+    });
+
+    const controller = new AbortController();
+    uploadAbortRef.current = controller;
+
+    try {
+      const { uploadUrl, storageKey } = await requestAttachmentUploadUrl(
+        file.type,
+        file.size,
+        file.name,
+      );
+
+      setUploadState(prev =>
+        prev && prev.file === file ? { ...prev, status: "uploading", progress: 0 } : prev,
+      );
+
+      let lastProgress = 0;
+      await uploadAttachmentToPresignedUrl(uploadUrl, file, (percent) => {
+        lastProgress = percent;
+        setUploadState(prev =>
+          prev && prev.file === file ? { ...prev, progress: percent } : prev,
+        );
+      }, controller.signal);
+
+      const fileType: "image" | "document" = file.type.startsWith("image/") ? "image" : "document";
+      setUploadState({
+        file,
+        progress: 100,
+        status: "done",
+        result: {
+          storageKey,
+          contentType: file.type,
+          sizeBytes: file.size,
+          type: fileType,
+          name: file.name,
+          url: uploadUrl.split("?")[0],
+        },
+      });
+    } catch (err) {
+      if ((err as Error).message === "Upload cancelled") {
+        setUploadState(null);
+        return;
+      }
+      setUploadState(prev =>
+        prev && prev.file === file
+          ? { ...prev, status: "error", error: (err as Error).message || "Upload failed" }
+          : prev,
+      );
+    }
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  }, []);
+
+  const handleCancelUpload = useCallback(() => {
+    uploadAbortRef.current?.abort();
+    uploadAbortRef.current = null;
+    setUploadState(null);
+  }, []);
+
+  const handleRemoveAttachment = useCallback(() => {
+    setUploadState(null);
+  }, []);
+
+  const getFileSizeDisplay = (bytes: number): string => {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
+
   const handleSendMessage = useCallback(async () => {
     const text = sanitizeText(newMessage).trim();
-    if (!text || isSending) return;
+    if ((!text && !uploadState) || isSending) return;
+
+    let attachment: { type: "image" | "document"; name: string } | undefined;
+    if (uploadState?.status === "done" && uploadState.result) {
+      attachment = {
+        type: uploadState.result.type,
+        name: uploadState.result.name,
+      };
+    }
 
     const optimisticMsg: Message = {
       id: Date.now(),
       senderId: "me",
-      text,
+      text: text || (attachment ? `Sent a ${attachment.type}` : ""),
       timestamp: new Date().toLocaleTimeString([], {
         hour: "2-digit",
         minute: "2-digit",
       }),
       status: "sending",
+      attachment,
     };
 
     setMessages((prev) => [...prev, optimisticMsg]);
     setNewMessage("");
+    setUploadState(null);
     setIsSending(true);
 
     try {
-      await simulateSend(text);
+      await simulateSend(text || "sent");
       setMessages((prev) =>
         prev.map((m) =>
           m.id === optimisticMsg.id ? { ...m, status: "sent" } : m,
@@ -124,7 +245,7 @@ export default function MessagesPage() {
     } finally {
       setIsSending(false);
     }
-  }, [newMessage, isSending, simulateSend]);
+  }, [newMessage, isSending, simulateSend, uploadState]);
 
   const handleRetry = useCallback(async (failedMsg: Message) => {
     if (isSending) return;
@@ -163,7 +284,6 @@ export default function MessagesPage() {
     (c) => c.id === selectedConversationId,
   );
 
-  // Show auth gate if not authenticated
   if (!isAuthenticated) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background pt-20">
@@ -301,7 +421,6 @@ export default function MessagesPage() {
           {/* Chat Header */}
           <div className="flex items-center justify-between border-b-3 border-foreground bg-card p-3 md:p-4">
             <div className="flex items-center gap-2 md:gap-4">
-              {/* Mobile back button */}
               <button
                 onClick={() => setSelectedConversationId(null)}
                 aria-label="Back to conversations"
@@ -432,13 +551,16 @@ export default function MessagesPage() {
                       {message.attachment && (
                         <div className="mt-2 flex items-center gap-2 border-2 border-foreground bg-muted/50 p-2">
                           {message.attachment.type === "image" ? (
-                            <ImageIcon className="h-4 w-4" />
+                            <ImageIcon className="h-4 w-4 shrink-0" />
                           ) : (
-                            <File className="h-4 w-4" />
+                            <File className="h-4 w-4 shrink-0" />
                           )}
-                          <span className="text-xs">
+                          <span className="text-xs truncate">
                             {message.attachment.name}
                           </span>
+                          {message.attachment.type === "image" && (
+                            <Download className="h-3 w-3 shrink-0 ml-auto text-muted-foreground" />
+                          )}
                         </div>
                       )}
                       <div className="mt-2 flex items-center justify-end gap-1">
@@ -487,13 +609,95 @@ export default function MessagesPage() {
             </div>
           </div>
 
+          {/* Attachment Preview */}
+          {uploadState && (
+            <div className="border-t-3 border-foreground bg-card px-3 md:px-4 py-2">
+              <div className="mx-auto flex max-w-3xl items-center gap-3 border-2 border-foreground bg-muted/30 p-2">
+                {uploadState.status === "error" ? (
+                  <AlertCircle className="h-5 w-5 shrink-0 text-destructive" />
+                ) : uploadState.status === "done" ? (
+                  uploadState.result?.type === "image" ? (
+                    <ImageIcon className="h-5 w-5 shrink-0 text-secondary" />
+                  ) : (
+                    <File className="h-5 w-5 shrink-0 text-secondary" />
+                  )
+                ) : (
+                  <Upload className="h-5 w-5 shrink-0 text-muted-foreground animate-pulse" />
+                )}
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-bold truncate">{uploadState.file.name}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {uploadState.status === "uploading" && `Uploading... ${uploadState.progress}%`}
+                    {uploadState.status === "pending" && "Ready to upload"}
+                    {uploadState.status === "done" && `${getFileSizeDisplay(uploadState.file.size)} - Ready to send`}
+                    {uploadState.status === "error" && (uploadState.error || "Upload failed")}
+                  </p>
+                  {uploadState.status === "uploading" && (
+                    <div className="mt-1 h-1.5 w-full bg-muted rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-secondary transition-all duration-200 rounded-full"
+                        style={{ width: `${uploadState.progress}%` }}
+                      />
+                    </div>
+                  )}
+                </div>
+                <div className="flex items-center gap-1">
+                  {uploadState.status === "uploading" && (
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={handleCancelUpload}
+                      className="h-7 w-7 border-2 border-foreground"
+                      aria-label="Cancel upload"
+                    >
+                      <X className="h-3 w-3" />
+                    </Button>
+                  )}
+                  {uploadState.status === "error" && (
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={handleRemoveAttachment}
+                      className="h-7 w-7 border-2 border-foreground"
+                      aria-label="Remove attachment"
+                    >
+                      <X className="h-3 w-3" />
+                    </Button>
+                  )}
+                  {uploadState.status === "done" && (
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={handleRemoveAttachment}
+                      className="h-7 w-7 border-2 border-foreground"
+                      aria-label="Remove attachment"
+                    >
+                      <X className="h-3 w-3" />
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Message Input */}
           <div className="border-t-3 border-foreground bg-card p-3 md:p-4">
             <div className="mx-auto flex max-w-3xl gap-2 md:gap-4">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/gif,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain"
+                className="hidden"
+                onChange={handleFileSelect}
+                aria-label="Attach file"
+              />
               <Button
                 variant="outline"
                 size="icon"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploadState?.status === "uploading"}
                 className="hidden border-3 border-foreground bg-transparent shadow-[4px_4px_0px_0px_rgba(26,26,26,1)] sm:flex"
+                aria-label="Attach file"
               >
                 <Paperclip className="h-4 w-4" />
               </Button>
@@ -512,7 +716,7 @@ export default function MessagesPage() {
               />
               <Button
                 onClick={handleSendMessage}
-                disabled={!newMessage.trim() || isSending}
+                disabled={(!newMessage.trim() && !uploadState) || isSending}
                 aria-label={isSending ? "Sending message" : "Send message"}
                 className="border-3 border-foreground bg-primary px-4 font-bold shadow-[4px_4px_0px_0px_rgba(26,26,26,1)] transition-all hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-[2px_2px_0px_0px_rgba(26,26,26,1)] disabled:opacity-50 md:px-6"
               >

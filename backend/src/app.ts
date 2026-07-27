@@ -172,6 +172,7 @@ import { createKycWebhookRouter } from "./routes/kyc.js";
 import { createOnboardingRouter } from "./routes/onboarding.js";
 import { createEmployersRouter } from "./routes/employers.js";
 import { createMessagingRouter } from "./routes/messaging.js";
+import { createAttachmentsRouter } from "./routes/attachments.js";
 import { MonthlyDeductionReminderJob } from "./jobs/monthlyDeductionReminderJob.js";
 import { dataRetentionPurgeJobHandler, DATA_RETENTION_PURGE_JOB_NAME } from "./jobs/dataRetentionPurgeJob.js";
 
@@ -905,6 +906,7 @@ export function createApp() {
 
   // Interactive API documentation
   app.use("/api/v1/messaging", createMessagingRouter());
+  app.use("/api/v1/messaging/attachments", createAttachmentsRouter());
   app.use("/docs", createDocsRouter());
 
   // Backward compatibility redirect from /api/* to /api/v1/*
