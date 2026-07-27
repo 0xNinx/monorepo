@@ -5,10 +5,6 @@ import { Home, Building2, Calculator, Menu, X, Bell } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useState } from "react"
 import { useNotificationUnread } from "@/hooks/use-notification-unread"
-import { LanguageSwitcher } from "@/components/language-switcher"
-import { CurrencyToggle } from "@/components/currency-toggle"
-import { ThemeToggle } from "@/components/theme-toggle"
-import { ConnectWalletButton } from "@/components/wallet/ConnectWalletButton"
 
 export function DashboardHeader() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
@@ -75,14 +71,6 @@ export function DashboardHeader() {
           </Link>
         </nav>
 
-        {/* Global Controls */}
-        <div className="hidden md:flex items-center gap-2">
-          <LanguageSwitcher />
-          <CurrencyToggle />
-          <ThemeToggle />
-          <ConnectWalletButton />
-        </div>
-
         {/* Mobile Menu Button */}
         <button
           type="button"
@@ -100,14 +88,8 @@ export function DashboardHeader() {
       {mobileMenuOpen && (
         <div
           id="dashboard-header-mobile-menu"
-          className="md:hidden border-t-2 border-foreground bg-card p-4 space-y-3"
+          className="md:hidden border-t-2 border-foreground bg-card p-4 space-y-2"
         >
-          <div className="flex items-center gap-3 pb-2 border-b border-border">
-            <LanguageSwitcher />
-            <CurrencyToggle />
-            <ThemeToggle />
-          </div>
-          <ConnectWalletButton />
           <Link href="/" className="block">
             <Button variant="outline" className="w-full border-2 border-foreground justify-start bg-transparent">
               <Home className="mr-2 h-4 w-4" />
