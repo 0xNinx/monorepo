@@ -50,7 +50,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { allProperties } from "@/lib/mockData/properties";
+import { getProperty, type PropertyListing } from "@/lib/propertiesApi";
 import { AmenitiesLegend } from "@/components/properties/AmenitiesLegend";
 import { showSuccessToast, showErrorToast } from "@/lib/toast";
 import { apiPost } from "@/lib/api";
@@ -65,8 +65,6 @@ import { InspectionReportAccordion } from "@/components/properties/InspectionRep
 import { LandlordSnippet } from "@/components/properties/LandlordSnippet";
 import useAuthStore from "@/store/useAuthStore";
 import { propertyInspectionApi, type InspectionSummary } from "@/lib/propertyInspectionApi";
-
-const properties = allProperties;
 
 const featureIcons: { [key: string]: React.ElementType } = {
   "24/7 Power Supply": Wind,
@@ -120,6 +118,9 @@ export default function PropertyDetailClient({
   const [isSubmittingReport, setIsSubmittingReport] = useState(false);
   const [inspectionSummary, setInspectionSummary] = useState<InspectionSummary | null>(null);
   const [isLoadingInspection, setIsLoadingInspection] = useState(false);
+  const [listing, setListing] = useState<PropertyListing | null>(null);
+  const [isLoadingProperty, setIsLoadingProperty] = useState(true);
+  const [propertyError, setPropertyError] = useState<string | null>(null);
   const lightboxRef = useRef<HTMLDivElement>(null);
   const mainGalleryRef = useRef<HTMLDivElement>(null);
 
@@ -176,6 +177,23 @@ export default function PropertyDetailClient({
     }
   }, [showLightbox]);
 
+  // Fetch property from API
+  useEffect(() => {
+    const fetchProperty = async () => {
+      setIsLoadingProperty(true);
+      setPropertyError(null);
+      try {
+        const result = await getProperty(propertyId);
+        setListing(result.data);
+      } catch (err: any) {
+        setPropertyError(err?.message || "Failed to load property");
+      } finally {
+        setIsLoadingProperty(false);
+      }
+    };
+    fetchProperty();
+  }, [propertyId]);
+
   // Fetch inspection summary
   useEffect(() => {
     const fetchInspectionSummary = async () => {
@@ -194,9 +212,50 @@ export default function PropertyDetailClient({
     fetchInspectionSummary();
   }, [propertyId]);
 
-  const property = properties.find((p) => p.id === Number.parseInt(propertyId));
+  // Map API listing to the format the component expects
+  const property = listing ? {
+    id: Number.parseInt(listing.listingId) || 0,
+    title: listing.address,
+    location: [listing.city, listing.area].filter(Boolean).join(", "),
+    address: listing.address,
+    price: listing.annualRentNgn,
+    outrightPriceNgn: listing.outrightPriceNgn,
+    installmentBasePriceNgn: listing.installmentBasePriceNgn,
+    beds: listing.bedrooms,
+    baths: listing.bathrooms,
+    sqm: 0,
+    image: listing.photos?.[0] || "/placeholder.svg",
+    verificationStatus: listing.status === "approved" ? "VERIFIED" : listing.status.toUpperCase(),
+    tag: null,
+    tagColor: null,
+    description: listing.description || "",
+    features: [],
+    images: (listing.photos || []).map((url, idx) => ({
+      id: idx + 1,
+      label: `Photo ${idx + 1}`,
+      url,
+    })),
+    landlord: {
+      name: "Property Owner",
+      verified: false,
+      listings: 1,
+      responseTime: "Within 24 hours",
+    },
+    whistleblower: null,
+  } : null;
 
-  if (!property) {
+  if (isLoadingProperty) {
+    return (
+      <main className="min-h-screen bg-background flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          <p className="text-muted-foreground font-mono">Loading property...</p>
+        </div>
+      </main>
+    );
+  }
+
+  if (propertyError || !property) {
     return (
       <main className="min-h-screen bg-background flex items-center justify-center">
         <div className="border-3 border-foreground bg-card p-12 text-center shadow-[6px_6px_0px_0px_rgba(26,26,26,1)]">
