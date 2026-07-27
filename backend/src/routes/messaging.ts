@@ -6,32 +6,21 @@ import {
   cleanupDisconnectedStream,
   getActiveStreamCount,
 } from "../services/messagingStreamService.js"
-import { AppError } from "../errors/AppError.js"
+import { AppError, notFound, unauthorized } from "../errors/AppError.js"
 import { ErrorCode } from "../errors/errorCodes.js"
 import { logger } from "../utils/logger.js"
-
-const router = Router()
-
-/**
- * GET /api/v1/messaging/stream
- *
- * Authenticated SSE endpoint that pushes new-message and read-receipt events
- * for conversations the caller participates in.
- *
- * Authentication (choose one):
- *   - Header:  Authorization: Bearer <token>
- *   - Query:   ?token=<token>   (for EventSource API which cannot set custom headers)
- *
- * Query params:
- *   token (optional) — auth token for EventSource compatibility
- *   lastEventId (optional) — resume from a specific event ID
- *
- * Events:
- *   event: new_message
- *   event: read_receipt
- *
- * Heartbeat: a comment line (`: heartbeat`) every 30 s to keep proxies alive.
- */
+import { conversationStore } from "../models/conversationStore.js"
+import {
+  createConversationSchema,
+  sendMessageSchema,
+  conversationFiltersSchema,
+  messageQuerySchema,
+  type CreateConversationRequest,
+  type SendMessageRequest,
+} from "../schemas/messaging.js"
+import { idempotency } from "../middleware/idempotency.js"
+import { createRateLimiter } from "../middleware/rateLimiter.js"
+import { rateLimitProfiles } from "../config/rateLimitConfig.js"
 
 // Lightweight auth middleware for SSE — checks both header and query param.
 async function sseAuth(req: AuthenticatedRequest, _res: Response, next: Function) {
@@ -63,59 +52,178 @@ async function sseAuth(req: AuthenticatedRequest, _res: Response, next: Function
   }
 }
 
-router.get(
-  "/stream",
-  sseAuth,
-  (req: AuthenticatedRequest, res: Response) => {
-    const userId = req.user!.id
+function requireUser(req: AuthenticatedRequest): string {
+  const userId = req.user?.id
+  if (!userId) {
+    throw unauthorized()
+  }
+  return userId
+}
 
-    // SSE headers
-    res.writeHead(200, {
-      "Content-Type": "text/event-stream",
-      "Cache-Control": "no-cache",
-      Connection: "keep-alive",
-      "X-Accel-Buffering": "no",
-    })
+export function createMessagingRouter(): Router {
+  const router = Router()
 
-    // Send initial connected event
-    res.write(`event: connected\ndata: ${JSON.stringify({ userId, timestamp: Date.now() })}\n\n`)
+  router.get(
+    "/stream",
+    sseAuth,
+    (req: AuthenticatedRequest, res: Response) => {
+      const userId = req.user!.id
 
-    const { success, client } = createStreamSession(userId, res)
-    if (!success) {
-      logger.warn("SSE stream limit reached for user", { userId })
-      res.write(`event: error\ndata: ${JSON.stringify({ message: "Too many concurrent streams. Close another tab and retry." })}\n\n`)
-      res.end()
-      return
-    }
+      res.writeHead(200, {
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        Connection: "keep-alive",
+        "X-Accel-Buffering": "no",
+      })
 
-    logger.info("SSE stream opened", {
-      userId,
-      activeStreams: getActiveStreamCount(),
-    })
+      res.write(`event: connected\ndata: ${JSON.stringify({ userId, timestamp: Date.now() })}\n\n`)
 
-    req.on("close", () => {
-      cleanupDisconnectedStream(res)
-      logger.info("SSE stream closed", {
+      const { success, client } = createStreamSession(userId, res)
+      if (!success) {
+        logger.warn("SSE stream limit reached for user", { userId })
+        res.write(`event: error\ndata: ${JSON.stringify({ message: "Too many concurrent streams. Close another tab and retry." })}\n\n`)
+        res.end()
+        return
+      }
+
+      logger.info("SSE stream opened", {
         userId,
         activeStreams: getActiveStreamCount(),
       })
-    })
 
-    req.on("error", () => {
-      cleanupDisconnectedStream(res)
-    })
-  },
-)
+      req.on("close", () => {
+        cleanupDisconnectedStream(res)
+        logger.info("SSE stream closed", {
+          userId,
+          activeStreams: getActiveStreamCount(),
+        })
+      })
 
-/**
- * GET /api/v1/messaging/stream/health
- * Returns the current active stream count (for monitoring).
- */
-router.get(
-  "/stream/health",
-  (_req: Request, res: Response) => {
-    res.json({ activeStreams: getActiveStreamCount() })
-  },
-)
+      req.on("error", () => {
+        cleanupDisconnectedStream(res)
+      })
+    },
+  )
 
-export default router
+  router.get(
+    "/stream/health",
+    (_req: Request, res: Response) => {
+      res.json({ activeStreams: getActiveStreamCount() })
+    },
+  )
+
+  router.get("/conversations", authenticateToken, async (req: AuthenticatedRequest, res: Response, next) => {
+    try {
+      const userId = requireUser(req)
+      const filters = conversationFiltersSchema.parse(req.query)
+      const conversations = await conversationStore.listConversations(userId, filters)
+      res.json({ success: true, data: conversations })
+    } catch (error) {
+      if (error instanceof Error && error.name === 'ZodError') {
+        return next(new AppError(ErrorCode.VALIDATION_ERROR, 400, error.message))
+      }
+      next(error)
+    }
+  })
+
+  router.post("/conversations", authenticateToken, idempotency(), async (req: AuthenticatedRequest, res: Response, next) => {
+    try {
+      const userId = requireUser(req)
+      const data: CreateConversationRequest = createConversationSchema.parse(req.body)
+      const participantIds = [...new Set([userId, ...data.participantIds])]
+      const conversation = await conversationStore.findOrCreateConversation({
+        participantIds,
+        subjectType: data.subjectType,
+        subjectId: data.subjectId,
+      })
+      res.status(201).json({ success: true, data: conversation })
+    } catch (error) {
+      if (error instanceof Error && error.name === 'ZodError') {
+        return next(new AppError(ErrorCode.VALIDATION_ERROR, 400, error.message))
+      }
+      next(error)
+    }
+  })
+
+  router.get("/conversations/:id", authenticateToken, async (req: AuthenticatedRequest, res: Response, next) => {
+    try {
+      const userId = requireUser(req)
+      const conversation = await conversationStore.getConversation(req.params.id, userId)
+      if (!conversation) {
+        throw notFound('Conversation')
+      }
+      res.json({ success: true, data: conversation })
+    } catch (error) {
+      next(error)
+    }
+  })
+
+  router.get("/conversations/:id/messages", authenticateToken, async (req: AuthenticatedRequest, res: Response, next) => {
+    try {
+      const userId = requireUser(req)
+      const isParticipant = await conversationStore.isParticipant(req.params.id, userId)
+      if (!isParticipant) {
+        throw notFound('Conversation')
+      }
+      const query = messageQuerySchema.parse(req.query)
+      const messages = await conversationStore.getMessages(req.params.id, userId, query.cursor, query.limit)
+      res.json({ success: true, data: messages })
+    } catch (error) {
+      if (error instanceof Error && error.name === 'ZodError') {
+        return next(new AppError(ErrorCode.VALIDATION_ERROR, 400, error.message))
+      }
+      next(error)
+    }
+  })
+
+  const messageRateLimit = createRateLimiter({ ...rateLimitProfiles.messaging, keyPrefix: 'rl:msg_send' })
+
+  router.post("/conversations/:id/messages", authenticateToken, messageRateLimit, idempotency(), async (req: AuthenticatedRequest, res: Response, next) => {
+    try {
+      const userId = requireUser(req)
+      const isParticipant = await conversationStore.isParticipant(req.params.id, userId)
+      if (!isParticipant) {
+        throw notFound('Conversation')
+      }
+      const data: SendMessageRequest = sendMessageSchema.parse(req.body)
+      const message = await conversationStore.sendMessage({
+        conversationId: req.params.id,
+        senderId: userId,
+        body: data.body,
+        attachment: data.attachment,
+      })
+      res.status(201).json({ success: true, data: message })
+    } catch (error) {
+      if (error instanceof Error && error.name === 'ZodError') {
+        return next(new AppError(ErrorCode.VALIDATION_ERROR, 400, error.message))
+      }
+      next(error)
+    }
+  })
+
+  router.post("/conversations/:id/read", authenticateToken, async (req: AuthenticatedRequest, res: Response, next) => {
+    try {
+      const userId = requireUser(req)
+      const isParticipant = await conversationStore.isParticipant(req.params.id, userId)
+      if (!isParticipant) {
+        throw notFound('Conversation')
+      }
+      await conversationStore.markRead(req.params.id, userId)
+      res.json({ success: true })
+    } catch (error) {
+      next(error)
+    }
+  })
+
+  router.get("/unread-count", authenticateToken, async (req: AuthenticatedRequest, res: Response, next) => {
+    try {
+      const userId = requireUser(req)
+      const count = await conversationStore.getUnreadCount(userId)
+      res.json({ success: true, data: { unread: count } })
+    } catch (error) {
+      next(error)
+    }
+  })
+
+  return router
+}
