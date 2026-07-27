@@ -34,8 +34,10 @@ export function LanguageSwitcher() {
   const handleLanguageChange = (newLocale: string) => {
     setPreference("language", newLocale);
     document.cookie = `NEXT_LOCALE=${newLocale}; path=/; max-age=${60 * 60 * 24 * 365}`;
-    const pathnameWithoutLocale = pathname.replace(`/${locale}`, "") || "/";
-    router.push(`/${newLocale}${pathnameWithoutLocale}`);
+    const pathnameWithoutLocale = pathname.replace(new RegExp(`^/${locale}`), "") || "/";
+    const search = typeof window !== "undefined" ? window.location.search : "";
+    const hash = typeof window !== "undefined" ? window.location.hash : "";
+    router.push(`/${newLocale}${pathnameWithoutLocale}${search}${hash}`);
   };
 
   return (
