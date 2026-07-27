@@ -7,26 +7,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { formatCurrency, formatDateTime } from "@/lib/i18n-utils";
 import type { WalletLedgerEntry } from "@/lib/types/dashboard";
-
-function formatDateTime(iso: string) {
-  const d = new Date(iso);
-  return new Intl.DateTimeFormat("en-NG", {
-    year: "numeric",
-    month: "short",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(d);
-}
-
-function formatNgn(amount: number) {
-  return new Intl.NumberFormat("en-NG", {
-    style: "currency",
-    currency: "NGN",
-    minimumFractionDigits: 0,
-  }).format(amount);
-}
 
 function typeLabel(type: WalletLedgerEntry["type"]) {
   switch (type) {
@@ -73,33 +55,54 @@ function statusPresentation(status: WalletLedgerEntry["status"]) {
   }
 }
 
+function isDebit(type: WalletLedgerEntry["type"]): boolean {
+  return ["withdrawal", "stake", "stake_reserve", "conversion_debit"].includes(type);
+}
+
 export function WalletLedgerTable({
   entries,
 }: {
   entries: WalletLedgerEntry[];
 }) {
+  if (entries.length === 0) {
+    return (
+      <div className="border-3 border-foreground border-dashed p-12 text-center bg-muted/30">
+        <p className="font-mono text-lg font-bold text-muted-foreground">
+          No transactions yet
+        </p>
+        <p className="text-sm text-muted-foreground mt-2">
+          Your wallet transactions will appear here.
+        </p>
+      </div>
+    );
+  }
+
   return (
-    <Table>
+    <Table aria-label="Wallet transaction ledger">
       <TableHeader>
         <TableRow>
-          <TableHead>Type</TableHead>
-          <TableHead>Amount</TableHead>
-          <TableHead>Status</TableHead>
-          <TableHead>When</TableHead>
-          <TableHead>Reference</TableHead>
+          <TableHead scope="col">Type</TableHead>
+          <TableHead scope="col">Amount</TableHead>
+          <TableHead scope="col">Status</TableHead>
+          <TableHead scope="col">When</TableHead>
+          <TableHead scope="col">Reference</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
         {entries.map((e) => {
           const status = statusPresentation(e.status);
+          const debit = isDebit(e.type);
           return (
             <TableRow key={e.id}>
               <TableCell className="font-bold text-foreground">
                 {typeLabel(e.type)}
               </TableCell>
               <TableCell>
-                <div className="font-mono font-bold">
-                  {formatNgn(e.amountNgn)}
+                <div
+                  className={`font-mono font-bold ${debit ? "text-destructive" : "text-foreground"}`}
+                >
+                  {debit ? "-" : ""}
+                  {formatCurrency(e.amountNgn, "NGN", "en-NG")}
                 </div>
                 {typeof e.amountUsdc === "string" && (
                   <div className="text-xs text-muted-foreground">
@@ -108,10 +111,19 @@ export function WalletLedgerTable({
                 )}
               </TableCell>
               <TableCell>
-                <Badge variant={status.variant}>{status.label}</Badge>
+                <Badge variant={status.variant}>
+                  <span aria-hidden="true">{status.label}</span>
+                  <span className="sr-only">Status: {status.label}</span>
+                </Badge>
               </TableCell>
               <TableCell className="text-muted-foreground">
-                {formatDateTime(e.timestamp)}
+                {formatDateTime(e.timestamp, "en-NG", {
+                  year: "numeric",
+                  month: "short",
+                  day: "2-digit",
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })}
               </TableCell>
               <TableCell className="font-mono text-xs text-muted-foreground">
                 {e.reference ?? "-"}

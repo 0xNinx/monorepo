@@ -13,7 +13,9 @@ export type UserRentalApplicationStatus =
   | "submitted"
   | "under_review"
   | "approved"
-  | "rejected";
+  | "rejected"
+  | "pending"
+  | "cancelled";
 
 export type UserRentalApplication = {
   id: string;
@@ -24,6 +26,7 @@ export type UserRentalApplication = {
   };
   status: UserRentalApplicationStatus;
   submittedAt: string;
+  rejectionReason?: string;
 };
 
 export type WalletBalance = {
