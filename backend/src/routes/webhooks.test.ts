@@ -7,15 +7,24 @@ import { TxType } from '../outbox/types.js'
 import { quoteStore } from '../models/quoteStore.js'
 import { webhookEventDedupeStore } from '../models/webhookEventDedupeStore.js'
 import { NgnWalletService } from '../services/ngnWalletService.js'
+import {
+  InMemoryWebhookReplayStore,
+  initWebhookReplayStore,
+  getStore as getWebhookReplayStore,
+  WebhookProcessingStatus,
+} from '../webhookReplay/index.js'
 
 describe('Payments webhook', () => {
   const app = createApp()
+  const originalNodeEnv = process.env.NODE_ENV
 
   beforeEach(async () => {
     await depositStore.clear()
     await outboxStore.clear()
     await quoteStore.clear()
     webhookEventDedupeStore.clear()
+    initWebhookReplayStore(new InMemoryWebhookReplayStore())
+    process.env.NODE_ENV = originalNodeEnv
     delete process.env.WEBHOOK_SIGNATURE_ENABLED
     delete process.env.WEBHOOK_SECRET
     delete process.env.PAYSTACK_SECRET
@@ -26,6 +35,7 @@ describe('Payments webhook', () => {
   afterEach(async () => {
     await depositStore.clear()
     await outboxStore.clear()
+    process.env.NODE_ENV = originalNodeEnv
   })
 
   it('is idempotent on replay (rail, externalRef) and second delivery is provider-event deduped', async () => {
@@ -148,6 +158,57 @@ describe('Payments webhook', () => {
       .set('x-webhook-timestamp', timestamp)
       .send(payload)
       .expect(200)
+  })
+
+  it('enforces Paystack signature validation in production', async () => {
+    process.env.NODE_ENV = 'production'
+    process.env.PAYSTACK_SECRET = 'prod_secret_paystack'
+
+    const quote = await quoteStore.create({
+      userId: 'prod-user-signature',
+      amountNgn: 220000,
+      paymentRail: 'paystack',
+      fxRateNgnPerUsdc: 1600,
+      feePercent: 0,
+      slippagePercent: 0,
+      expiryMs: 3600000,
+    })
+
+    const init = await request(app)
+      .post('/api/staking/deposit/initiate')
+      .set('x-user-id', 'prod-user-signature')
+      .send({ quoteId: quote.quoteId, paymentRail: 'paystack' })
+      .expect(201)
+
+    await request(app)
+      .post('/api/webhooks/payments/paystack')
+      .send({
+        externalRefSource: 'paystack',
+        externalRef: init.body.externalRef,
+        status: 'confirmed',
+        providerEventId: 'evt-prod-signature-1',
+      })
+      .expect(401)
+  })
+
+  it('persists inbound webhook event before processing and marks failures for replay', async () => {
+    const replayStore = getWebhookReplayStore()
+    const providerEventId = 'evt-missing-deposit-1'
+
+    await request(app)
+      .post('/api/webhooks/payments/paystack')
+      .send({
+        externalRefSource: 'paystack',
+        externalRef: 'missing-external-ref',
+        status: 'confirmed',
+        providerEventId,
+      })
+      .expect(404)
+
+    const stored = await replayStore.getEventByProviderAndExternalId('paystack', providerEventId)
+    expect(stored).not.toBeNull()
+    expect(stored?.processingStatus).toBe(WebhookProcessingStatus.FAILED)
+    expect(stored?.processingError).toContain('Deposit not found')
   })
 
   it('applies concurrent deliveries of one provider event exactly once', async () => {
