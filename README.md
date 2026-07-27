@@ -63,12 +63,12 @@ New contributors can run **just one** component without setting up the others.
 
 ## Option A: Frontend Only
 
-**Prerequisites:** Node.js 20+
+**Prerequisites:** Node.js 22, pnpm 9.15.5
 
 ```bash
 cd frontend
-npm install
-npm run dev
+pnpm install --frozen-lockfile
+pnpm run dev
 ```
 
 - Runs on: `http://localhost:3000`
@@ -77,11 +77,11 @@ npm run dev
 
 ### Option B: Backend Only
 
-**Prerequisites:** Node.js 20+
+**Prerequisites:** Node.js 22
 
 ```bash
 cd backend
-npm install
+npm ci
 cp .env.example .env
 npm run dev
 ```
@@ -92,7 +92,7 @@ npm run dev
 
 ### Option C: Contracts Only
 
-**Prerequisites:** Rust (stable), Soroban CLI (`stellar`)
+**Prerequisites:** Rust stable with `rustfmt` and `clippy`, Soroban CLI (`stellar`)
 
 ```bash
 cd contracts
