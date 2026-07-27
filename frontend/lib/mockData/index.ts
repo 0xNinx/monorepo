@@ -9,13 +9,6 @@ export { allProperties, propertyFilters } from "./properties";
 // Messages
 export { conversations, messageThreads } from "./messagesData";
 
-// Landlords Page
-export {
-  landlordBenefits,
-  landlordStats,
-  landlordTestimonials,
-} from "./landlordsPage";
-
 // Lease
 export { leaseDetails } from "./leaseData";
 
