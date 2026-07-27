@@ -380,6 +380,7 @@ class PostgresDealStore implements DealStorePort {
       FROM tenant_deals td
       LEFT JOIN tenant_deal_schedules tds ON tds.deal_id = td.deal_id
       WHERE td.status IN ('active', 'at_risk')
+        AND td.deleted_at IS NULL
       ORDER BY td.deal_id, tds.period ASC`,
     )
 
@@ -407,7 +408,7 @@ class PostgresDealStore implements DealStorePort {
 
   async findMany(filters: DealFilters = {}): Promise<PaginatedDeals> {
     const pool = await this.pool()
-    const where: string[] = []
+    const where: string[] = ['deleted_at IS NULL']
     const values: unknown[] = []
 
     if (filters.tenantId) {
@@ -499,7 +500,7 @@ class PostgresDealStore implements DealStorePort {
       const oldStatus = row0.status
       const amountNgn = toNumber(row0.amount_ngn)
       const { rows: trows } = await client.query(
-        `SELECT tenant_id, landlord_id FROM tenant_deals WHERE deal_id = $1 FOR UPDATE`,
+        `SELECT tenant_id, landlord_id FROM tenant_deals WHERE deal_id = $1 AND deleted_at IS NULL FOR UPDATE`,
         [dealId],
       )
       if (trows.length === 0) {
@@ -587,7 +588,7 @@ class PostgresDealStore implements DealStorePort {
     pool: PgPoolLike,
     dealId: string,
   ): Promise<DealWithSchedule | null> {
-    const { rows } = await pool.query('SELECT * FROM tenant_deals WHERE deal_id = $1', [dealId])
+    const { rows } = await pool.query('SELECT * FROM tenant_deals WHERE deal_id = $1 AND deleted_at IS NULL', [dealId])
     if (rows.length === 0) {
       return null
     }

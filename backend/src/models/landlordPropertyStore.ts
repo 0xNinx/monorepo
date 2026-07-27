@@ -238,7 +238,7 @@ class PostgresLandlordPropertyStore implements LandlordPropertyStorePort {
   async getById(id: string): Promise<LandlordProperty | null> {
     const pool = await this.pool()
     const { rows } = await pool.query(
-      'SELECT * FROM landlord_properties WHERE id = $1',
+      'SELECT * FROM landlord_properties WHERE id = $1 AND deleted_at IS NULL',
       [id],
     )
 
@@ -248,7 +248,7 @@ class PostgresLandlordPropertyStore implements LandlordPropertyStorePort {
 
   async list(filters: PropertyFilters = {}): Promise<PaginatedProperties> {
     const pool = await this.pool()
-    const where: string[] = []
+    const where: string[] = ['deleted_at IS NULL']
     const values: unknown[] = []
 
     if (filters.landlordId) {
@@ -340,7 +340,7 @@ class PostgresLandlordPropertyStore implements LandlordPropertyStorePort {
   async delete(id: string): Promise<boolean> {
     const pool = await this.pool()
     const { rowCount } = await pool.query(
-      'DELETE FROM landlord_properties WHERE id = $1',
+      'UPDATE landlord_properties SET deleted_at = NOW() WHERE id = $1 AND deleted_at IS NULL',
       [id],
     )
     return rowCount > 0

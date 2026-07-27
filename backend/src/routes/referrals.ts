@@ -112,8 +112,8 @@ router.get('/admin/referrals', authenticateToken, async (req: Request, res: Resp
           `SELECT u1.email as referrer_email, u2.email as referred_email, rc.code
            FROM referral_conversions rc
            JOIN referral_codes r ON rc.referral_code_id = r.id
-           JOIN users u1 ON r.tenant_id = u1.id
-           JOIN users u2 ON rc.referred_tenant_id = u2.id
+           JOIN users u1 ON r.tenant_id = u1.id AND u1.deleted_at IS NULL
+           JOIN users u2 ON rc.referred_tenant_id = u2.id AND u2.deleted_at IS NULL
            WHERE rc.id = $1`,
           [conv.id],
         )

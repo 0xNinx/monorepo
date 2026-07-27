@@ -59,7 +59,7 @@ export class KycRepository {
     if (!pool) throw new Error('Database not configured')
 
     const { rows } = await pool.query(
-      `SELECT * FROM kyc_documents WHERE user_id = $1 ORDER BY created_at DESC LIMIT 1`,
+      `SELECT * FROM kyc_documents WHERE user_id = $1 AND deleted_at IS NULL ORDER BY created_at DESC LIMIT 1`,
       [userId],
     )
 
@@ -71,7 +71,7 @@ export class KycRepository {
     const pool = await this.pool()
     if (!pool) throw new Error('Database not configured')
 
-    const { rows } = await pool.query(`SELECT * FROM kyc_documents WHERE id = $1`, [id])
+    const { rows } = await pool.query(`SELECT * FROM kyc_documents WHERE id = $1 AND deleted_at IS NULL`, [id])
     if (rows.length === 0) return null
     return this.mapRowToRecord(rows[0])
   }
@@ -104,7 +104,7 @@ export class KycRepository {
     const pool = await this.pool()
     if (!pool) throw new Error('Database not configured')
 
-    const conditions: string[] = []
+    const conditions: string[] = ['deleted_at IS NULL']
     const params: unknown[] = []
     let paramIndex = 1
 

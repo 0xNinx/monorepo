@@ -158,7 +158,7 @@ class PostgresApartmentReviewStore implements ApartmentReviewStorePort {
     const { rows } = await pool.query(
       `SELECT r.*, u.name as user_name 
        FROM apartment_reviews r
-       JOIN users u ON r.user_id = u.id
+       JOIN users u ON r.user_id = u.id AND u.deleted_at IS NULL
        WHERE r.id = $1`,
       [id],
     )
@@ -217,7 +217,7 @@ class PostgresApartmentReviewStore implements ApartmentReviewStorePort {
     const reviewRows = await pool.query(
       `SELECT r.*, u.name as user_name 
        FROM apartment_reviews r
-       LEFT JOIN users u ON r.user_id = u.id
+       LEFT JOIN users u ON r.user_id = u.id AND u.deleted_at IS NULL
        ${whereClause}
        ORDER BY ${orderBy}
        LIMIT $${values.length + 1} OFFSET $${values.length + 2}`,

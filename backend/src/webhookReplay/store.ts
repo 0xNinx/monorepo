@@ -57,7 +57,7 @@ export class PostgresWebhookReplayStore implements IWebhookReplayStore {
     const pool = await getPool()
     if (!pool) return null
     const result = await pool.query(
-      'SELECT * FROM webhook_events WHERE id = $1',
+      'SELECT * FROM webhook_events WHERE id = $1 AND deleted_at IS NULL',
       [id]
     )
     return result.rows[0] ? this.mapRowToEvent(result.rows[0]) : null
@@ -67,7 +67,7 @@ export class PostgresWebhookReplayStore implements IWebhookReplayStore {
     const pool = await getPool()
     if (!pool) return null
     const result = await pool.query(
-      'SELECT * FROM webhook_events WHERE provider = $1 AND external_id = $2',
+      'SELECT * FROM webhook_events WHERE provider = $1 AND external_id = $2 AND deleted_at IS NULL',
       [provider, externalId]
     )
     return result.rows[0] ? this.mapRowToEvent(result.rows[0]) : null
@@ -77,7 +77,7 @@ export class PostgresWebhookReplayStore implements IWebhookReplayStore {
     const pool = await getPool()
     if (!pool) return []
     
-    const conditions: string[] = []
+    const conditions: string[] = ['deleted_at IS NULL']
     const params: any[] = []
     let paramIndex = 1
 
