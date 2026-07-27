@@ -4,13 +4,16 @@ Next.js web app for Shelterflex.
 
 ## Setup
 
-> **Package manager:** This project uses **npm**. Use `npm install` (not `pnpm` or `yarn`) to match
-> the `package-lock.json` lockfile that is committed to the repository.
+> **Package manager:** This project uses **pnpm**. Use `pnpm install --frozen-lockfile` (not `npm install`) to match
+> the `pnpm-lock.yaml` lockfile that CI uses.
 
 ```bash
-npm install
-npm run dev
+pnpm install --frozen-lockfile
+pnpm run dev
 ```
+
+- The frontend currently contains both `package-lock.json` and `pnpm-lock.yaml`.
+- `pnpm-lock.yaml` is authoritative for this project; do not use `npm install` here.
 
 ## Notes
 
