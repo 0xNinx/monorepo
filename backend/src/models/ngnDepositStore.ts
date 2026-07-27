@@ -58,7 +58,7 @@ class NgnDepositStore {
     }
 
     const params: any[] = []
-    let where: string[] = []
+    let where: string[] = ['deleted_at IS NULL']
     if (status) {
       params.push(status)
       where.push(`status = $${params.length}`)
@@ -82,7 +82,7 @@ class NgnDepositStore {
       return this.byId.get(depositId) ?? null
     }
 
-    const { rows } = await pool.query(`SELECT * FROM ngn_deposits WHERE deposit_id=$1`, [depositId])
+    const { rows } = await pool.query(`SELECT * FROM ngn_deposits WHERE deposit_id=$1 AND deleted_at IS NULL`, [depositId])
     const row = rows[0]
     return row ? mapRow(row) : null
   }
@@ -97,7 +97,7 @@ class NgnDepositStore {
     }
 
     const { rows } = await pool.query(
-      `SELECT * FROM ngn_deposits WHERE user_id=$1 AND idempotency_key=$2 ORDER BY created_at DESC LIMIT 1`,
+      `SELECT * FROM ngn_deposits WHERE user_id=$1 AND idempotency_key=$2 AND deleted_at IS NULL ORDER BY created_at DESC LIMIT 1`,
       [userId, idempotencyKey],
     )
     const row = rows[0]
@@ -113,7 +113,7 @@ class NgnDepositStore {
     }
 
     const { rows } = await pool.query(
-      `SELECT * FROM ngn_deposits WHERE external_ref_source=$1 AND external_ref=$2 ORDER BY created_at DESC LIMIT 1`,
+      `SELECT * FROM ngn_deposits WHERE external_ref_source=$1 AND external_ref=$2 AND deleted_at IS NULL ORDER BY created_at DESC LIMIT 1`,
       [externalRefSource, externalRef],
     )
     const row = rows[0]

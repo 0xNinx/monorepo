@@ -251,18 +251,22 @@
     },
     {
       "position": 63,
-      "filename": "041_outbox_exactly_once.sql"
+      "filename": "041_messaging.sql"
     },
     {
       "position": 64,
-      "filename": "042_conversion_saga.sql"
+      "filename": "041_outbox_exactly_once.sql"
     },
     {
       "position": 65,
-      "filename": "043_stellar_sequence_allocator.sql"
+      "filename": "042_conversion_saga.sql"
     },
     {
       "position": 66,
+      "filename": "043_stellar_sequence_allocator.sql"
+    },
+    {
+      "position": 67,
       "filename": "044_signing_key_rotation.sql"
     }
   ]

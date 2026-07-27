@@ -30,9 +30,9 @@ export function createLandlordRouter() {
           (d.annual_rent_ngn / 12) as "monthlyPayment",
           (SELECT COALESCE(SUM(amount_ngn), 0) FROM tenant_deal_schedules WHERE deal_id = d.deal_id AND status = 'paid') as "totalPaid"
         FROM tenant_deals d
-        JOIN users u ON d.tenant_id = u.id::text
-        JOIN whistleblower_listings l ON d.listing_id = l.listing_id
-        WHERE d.landlord_id = $1`,
+        JOIN users u ON d.tenant_id = u.id::text AND u.deleted_at IS NULL
+        JOIN whistleblower_listings l ON d.listing_id = l.listing_id AND l.deleted_at IS NULL
+        WHERE d.landlord_id = $1 AND d.deleted_at IS NULL`,
         [landlordId]
       )
 
