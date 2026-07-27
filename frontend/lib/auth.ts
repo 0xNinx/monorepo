@@ -1,3 +1,5 @@
+import { clearAuthenticatedOfflineState } from "./offline-session";
+
 const TOKEN_KEY = "shelterflex_token";
 
 export function getToken(): string | null {
@@ -21,6 +23,7 @@ export function isAuthenticated(): boolean {
 
 export function logout(): void {
   clearToken();
+  clearAuthenticatedOfflineState();
   // Redirect to homepage after logout
   if (typeof window !== "undefined") {
     window.location.href = "/";
