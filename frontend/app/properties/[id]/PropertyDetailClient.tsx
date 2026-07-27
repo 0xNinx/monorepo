@@ -65,6 +65,7 @@ import { InspectionReportAccordion } from "@/components/properties/InspectionRep
 import { LandlordSnippet } from "@/components/properties/LandlordSnippet";
 import useAuthStore from "@/store/useAuthStore";
 import { propertyInspectionApi, type InspectionSummary } from "@/lib/propertyInspectionApi";
+import { SectionBoundary } from "@/components/section-boundary";
 
 const featureIcons: { [key: string]: React.ElementType } = {
   "24/7 Power Supply": Wind,
@@ -564,15 +565,17 @@ export default function PropertyDetailClient({
               </div>
 
               {/* Trust Indicators Bar */}
-              <TrustIndicatorBar
-                landlordKyc={property.landlord?.verified ?? false}
-                inspectionPass={inspectionSummary ? {
-                  date: inspectionSummary.approvedAt,
-                  inspectorName: `Inspector #${inspectionSummary.inspectionId.slice(0, 8)}`,
-                } : null}
-                whistleblowerCleared={!!property.whistleblower}
-                verificationStatus={(property as any).verificationStatus}
-              />
+              <SectionBoundary section="property-trust-bar" userRole="guest">
+                <TrustIndicatorBar
+                  landlordKyc={property.landlord?.verified ?? false}
+                  inspectionPass={inspectionSummary ? {
+                    date: inspectionSummary.approvedAt,
+                    inspectorName: `Inspector #${inspectionSummary.inspectionId.slice(0, 8)}`,
+                  } : null}
+                  whistleblowerCleared={!!property.whistleblower}
+                  verificationStatus={(property as any).verificationStatus}
+                />
+              </SectionBoundary>
 
               {/* Description */}
               <div className="border-3 border-foreground bg-card p-4 shadow-[4px_4px_0px_0px_rgba(26,26,26,1)] sm:p-6">
@@ -616,13 +619,15 @@ export default function PropertyDetailClient({
               <AmenitiesLegend />
 
               {/* Inspection Report Accordion */}
-              <InspectionReportAccordion 
-                report={inspectionSummary ? {
-                  overallGrade: inspectionSummary.passCount > inspectionSummary.failCount ? 'A' : inspectionSummary.passCount === inspectionSummary.failCount ? 'B' : 'C',
-                  roomConditions: inspectionSummary.categoryResults,
-                  photos: property.images.slice(0, 3).map(img => img.url).filter(Boolean) as string[]
-                } : null}
-              />
+              <SectionBoundary section="property-inspection-report" userRole="guest">
+                <InspectionReportAccordion 
+                  report={inspectionSummary ? {
+                    overallGrade: inspectionSummary.passCount > inspectionSummary.failCount ? 'A' : inspectionSummary.passCount === inspectionSummary.failCount ? 'B' : 'C',
+                    roomConditions: inspectionSummary.categoryResults,
+                    photos: property.images.slice(0, 3).map(img => img.url).filter(Boolean) as string[]
+                  } : null}
+                />
+              </SectionBoundary>
 
               {/* Room Gallery */}
               <div className="border-3 border-foreground bg-card p-6 shadow-[4px_4px_0px_0px_rgba(26,26,26,1)]">
@@ -667,24 +672,27 @@ export default function PropertyDetailClient({
               </div>
 
               {/* Reviews Section */}
-              <div className="border-3 border-foreground bg-card p-6 shadow-[4px_4px_0px_0px_rgba(26,26,26,1)]">
-                <h2 className="font-mono text-xl font-bold mb-6">
-                  User Feedback & Reviews
-                </h2>
-                <Suspense fallback={
-                  <div className="flex flex-col items-center justify-center py-12">
-                    <Loader2 className="h-8 w-8 animate-spin text-primary mb-4" />
-                    <p className="text-muted-foreground font-mono">Loading reviews...</p>
-                  </div>
-                }>
-                  <ApartmentReviews key={propertyId} propertyId={propertyId} />
-                </Suspense>
-              </div>
+              <SectionBoundary section="property-reviews" userRole="guest">
+                <div className="border-3 border-foreground bg-card p-6 shadow-[4px_4px_0px_0px_rgba(26,26,26,1)]">
+                  <h2 className="font-mono text-xl font-bold mb-6">
+                    User Feedback & Reviews
+                  </h2>
+                  <Suspense fallback={
+                    <div className="flex flex-col items-center justify-center py-12">
+                      <Loader2 className="h-8 w-8 animate-spin text-primary mb-4" />
+                      <p className="text-muted-foreground font-mono">Loading reviews...</p>
+                    </div>
+                  }>
+                    <ApartmentReviews key={propertyId} propertyId={propertyId} />
+                  </Suspense>
+                </div>
+              </SectionBoundary>
             </div>
 
             {/* Sidebar - Pricing & CTA */}
             <div className="lg:col-span-1">
-              <div className="sticky top-24 space-y-6">
+              <SectionBoundary section="property-sidebar" userRole={isAuthenticated ? "tenant" : "guest"}>
+                <div className="sticky top-24 space-y-6">
                 {/* Pricing Card */}
                 <div className="border-3 border-foreground bg-card p-4 shadow-[6px_6px_0px_0px_rgba(26,26,26,1)] sm:p-6">
                   {(property as any).outrightPriceNgn && (property as any).installmentBasePriceNgn ? (
@@ -885,26 +893,27 @@ export default function PropertyDetailClient({
                   }}
                 />
 
-                {/* Report Listing Card */}
-                <div className="border-3 border-foreground bg-card p-6 shadow-[4px_4px_0px_0px_rgba(26,26,26,1)]">
-                  <div className="flex items-center gap-2 mb-3">
-                    <Flag className="h-5 w-5 text-muted-foreground" />
-                    <h3 className="font-mono font-bold">Report an Issue</h3>
+                  {/* Report Listing Card */}
+                  <div className="border-3 border-foreground bg-card p-6 shadow-[4px_4px_0px_0px_rgba(26,26,26,1)]">
+                    <div className="flex items-center gap-2 mb-3">
+                      <Flag className="h-5 w-5 text-muted-foreground" />
+                      <h3 className="font-mono font-bold">Report an Issue</h3>
+                    </div>
+                    <p className="text-sm text-muted-foreground mb-4">
+                      See something suspicious or incorrect about this listing?
+                      Let us know.
+                    </p>
+                    <Button
+                      onClick={() => setShowReportDialog(true)}
+                      variant="outline"
+                      className="w-full border-3 border-foreground bg-transparent py-5 font-bold shadow-[3px_3px_0px_0px_rgba(26,26,26,1)] transition-all hover:translate-x-px hover:translate-y-px hover:shadow-[2px_2px_0px_0px_rgba(26,26,26,1)]"
+                    >
+                      <Flag className="mr-2 h-4 w-4" />
+                      Report Listing
+                    </Button>
                   </div>
-                  <p className="text-sm text-muted-foreground mb-4">
-                    See something suspicious or incorrect about this listing?
-                    Let us know.
-                  </p>
-                  <Button
-                    onClick={() => setShowReportDialog(true)}
-                    variant="outline"
-                    className="w-full border-3 border-foreground bg-transparent py-5 font-bold shadow-[3px_3px_0px_0px_rgba(26,26,26,1)] transition-all hover:translate-x-px hover:translate-y-px hover:shadow-[2px_2px_0px_0px_rgba(26,26,26,1)]"
-                  >
-                    <Flag className="mr-2 h-4 w-4" />
-                    Report Listing
-                  </Button>
                 </div>
-              </div>
+              </SectionBoundary>
             </div>
           </div>
         </div>

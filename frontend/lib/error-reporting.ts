@@ -7,6 +7,8 @@ interface ErrorReportPayload {
   error: Error
   componentStack?: string
   level: ErrorReportLevel
+  section?: string
+  userRole?: string
 }
 
 function buildEventId() {
@@ -22,18 +24,29 @@ export async function reportClientError({
   error,
   componentStack,
   level,
+  section,
+  userRole,
 }: ErrorReportPayload): Promise<string | null> {
   const eventId = buildEventId()
+  const pathname = typeof window !== 'undefined' ? window.location.pathname : undefined
+  const sanitizedMessage = sanitizeMessage(error.message)
   
   // Send error to Sentry
   Sentry.captureException(error, {
     tags: {
       level,
+      section: section ?? 'unknown',
+      userRole: userRole ?? 'unknown',
       componentStack: componentStack ? 'present' : 'absent',
     },
     extra: {
-      componentStack: process.env.NODE_ENV === 'production' ? undefined : componentStack?.slice(0, 1500),
-      pathname: typeof window !== 'undefined' ? window.location.pathname : undefined,
+      componentStack:
+        process.env.NODE_ENV === 'production'
+          ? undefined
+          : componentStack?.slice(0, 1500),
+      pathname,
+      sanitizedMessage,
+      eventId,
     },
   })
 
@@ -41,7 +54,10 @@ export async function reportClientError({
     console.error('Client error report:', {
       eventId,
       level,
-      message: sanitizeMessage(error.message),
+      pathname,
+      section,
+      userRole,
+      message: sanitizedMessage,
       name: error.name,
     })
     return eventId
@@ -61,11 +77,13 @@ export async function reportClientError({
       body: JSON.stringify({
         eventId,
         level,
-        message: sanitizeMessage(error.message),
+        section,
+        userRole,
+        pathname,
+        message: sanitizedMessage,
         name: error.name,
         componentStack:
           process.env.NODE_ENV === 'production' ? undefined : componentStack?.slice(0, 1500),
-        pathname: typeof window !== 'undefined' ? window.location.pathname : undefined,
         timestamp: new Date().toISOString(),
       }),
       keepalive: true,
