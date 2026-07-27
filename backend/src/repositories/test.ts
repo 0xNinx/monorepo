@@ -1,6 +1,7 @@
-import { readFile, readdir } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { getOrderedMigrationFiles } from "../migrations/migrationOrdering.js";
 
 const databaseUrl = process.env.DATABASE_URL;
 
@@ -23,9 +24,7 @@ async function runMigrations(pool: any): Promise<void> {
     )
   `);
 
-  const files = (await readdir(migrationsDir))
-    .filter((file) => file.endsWith(".sql"))
-    .sort((a, b) => a.localeCompare(b));
+  const files = await getOrderedMigrationFiles(migrationsDir);
 
   for (const file of files) {
     const alreadyApplied = await pool.query(

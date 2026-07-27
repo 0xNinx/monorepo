@@ -1,0 +1,269 @@
+{
+  "version": 1,
+  "legacyMigrations": [
+    {
+      "position": 1,
+      "filename": "001_init.sql"
+    },
+    {
+      "position": 2,
+      "filename": "002_ngn_deposits.sql"
+    },
+    {
+      "position": 3,
+      "filename": "003_conversions.sql"
+    },
+    {
+      "position": 4,
+      "filename": "003_receipt_indexer.sql"
+    },
+    {
+      "position": 5,
+      "filename": "004_wallets_and_linked_addresses.sql"
+    },
+    {
+      "position": 6,
+      "filename": "005_auth_tables.sql"
+    },
+    {
+      "position": 7,
+      "filename": "005_outbox.sql"
+    },
+    {
+      "position": 8,
+      "filename": "006_deal_listing_reward_store.sql"
+    },
+    {
+      "position": 9,
+      "filename": "007_job_scheduler.sql"
+    },
+    {
+      "position": 10,
+      "filename": "007_landlord_properties.sql"
+    },
+    {
+      "position": 11,
+      "filename": "007_user_tiers.sql"
+    },
+    {
+      "position": 12,
+      "filename": "008_audit_log.sql"
+    },
+    {
+      "position": 13,
+      "filename": "008_timelock_governance.sql"
+    },
+    {
+      "position": 14,
+      "filename": "008_webhook_replay.sql"
+    },
+    {
+      "position": 15,
+      "filename": "009_outbox_dead_status.sql"
+    },
+    {
+      "position": 16,
+      "filename": "010_landlord_profiles.sql"
+    },
+    {
+      "position": 17,
+      "filename": "011_tenant_applications.sql"
+    },
+    {
+      "position": 18,
+      "filename": "012_webhook_event_dedupe.sql"
+    },
+    {
+      "position": 19,
+      "filename": "013_api_idempotency.sql"
+    },
+    {
+      "position": 20,
+      "filename": "014_settlement_outbox.sql"
+    },
+    {
+      "position": 21,
+      "filename": "015_notifications.sql"
+    },
+    {
+      "position": 22,
+      "filename": "016_outbox_dlq_columns.sql"
+    },
+    {
+      "position": 23,
+      "filename": "016_public_application_intake.sql"
+    },
+    {
+      "position": 24,
+      "filename": "016_support_messages.sql"
+    },
+    {
+      "position": 25,
+      "filename": "017_whistleblower_ratings.sql"
+    },
+    {
+      "position": 26,
+      "filename": "018_property_issue_reports.sql"
+    },
+    {
+      "position": 27,
+      "filename": "019_full_payment_settlement_ledger.sql"
+    },
+    {
+      "position": 28,
+      "filename": "020_apartment_reviews.sql"
+    },
+    {
+      "position": 29,
+      "filename": "020_underwriting_decision_traces.sql"
+    },
+    {
+      "position": 30,
+      "filename": "021_kyc_documents.sql"
+    },
+    {
+      "position": 31,
+      "filename": "022_payment_disputes.sql"
+    },
+    {
+      "position": 32,
+      "filename": "023_reconciliation.sql"
+    },
+    {
+      "position": 33,
+      "filename": "024_sessions_device_tracking.sql"
+    },
+    {
+      "position": 34,
+      "filename": "025_job_scheduler_leases.sql"
+    },
+    {
+      "position": 35,
+      "filename": "025_property_photos.sql"
+    },
+    {
+      "position": 36,
+      "filename": "025_tenant_documents.sql"
+    },
+    {
+      "position": 37,
+      "filename": "026_fraud_detection.sql"
+    },
+    {
+      "position": 38,
+      "filename": "026_landlord_payouts.sql"
+    },
+    {
+      "position": 39,
+      "filename": "027_kyc_attempt_count.sql"
+    },
+    {
+      "position": 40,
+      "filename": "027_user_display_currency.sql"
+    },
+    {
+      "position": 41,
+      "filename": "028_landlord_property_listing_fields.sql"
+    },
+    {
+      "position": 42,
+      "filename": "028_onboarding_drafts.sql"
+    },
+    {
+      "position": 43,
+      "filename": "029_inspection_jobs.sql"
+    },
+    {
+      "position": 44,
+      "filename": "030_two_tier_pricing.sql"
+    },
+    {
+      "position": 45,
+      "filename": "031_rent_guarantee_policies.sql"
+    },
+    {
+      "position": 46,
+      "filename": "032_tenant_rating_card.sql"
+    },
+    {
+      "position": 47,
+      "filename": "033_background_check_results.sql"
+    },
+    {
+      "position": 48,
+      "filename": "033_erasure_requests.sql"
+    },
+    {
+      "position": 49,
+      "filename": "033_underwriting_ai_risk_score.sql"
+    },
+    {
+      "position": 50,
+      "filename": "034_add_missing_indexes.sql"
+    },
+    {
+      "position": 51,
+      "filename": "035_admin_rbac.sql"
+    },
+    {
+      "position": 52,
+      "filename": "036_listings_search_vector.sql"
+    },
+    {
+      "position": 53,
+      "filename": "036_tenant_document_presign.sql"
+    },
+    {
+      "position": 54,
+      "filename": "037_credit_score_snapshots.sql"
+    },
+    {
+      "position": 55,
+      "filename": "037_refresh_tokens.sql"
+    },
+    {
+      "position": 56,
+      "filename": "037_repayment_schedule.sql"
+    },
+    {
+      "position": 57,
+      "filename": "038_soroban_event_indexer.sql"
+    },
+    {
+      "position": 58,
+      "filename": "039_landlord_verification.sql"
+    },
+    {
+      "position": 59,
+      "filename": "039_soft_delete_data_retention.sql"
+    },
+    {
+      "position": 60,
+      "filename": "039_tenant_documents_deal_linkage.sql"
+    },
+    {
+      "position": 61,
+      "filename": "040_property_inspections.sql"
+    },
+    {
+      "position": 62,
+      "filename": "040_tenant_referral_programme.sql"
+    },
+    {
+      "position": 63,
+      "filename": "041_outbox_exactly_once.sql"
+    },
+    {
+      "position": 64,
+      "filename": "042_conversion_saga.sql"
+    },
+    {
+      "position": 65,
+      "filename": "043_stellar_sequence_allocator.sql"
+    },
+    {
+      "position": 66,
+      "filename": "044_signing_key_rotation.sql"
+    }
+  ]
+}
