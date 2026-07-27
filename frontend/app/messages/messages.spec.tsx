@@ -1,6 +1,7 @@
 import { render, screen, fireEvent, act } from "@testing-library/react";
 import MessagesPage from "./page";
 import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
+import * as messagingApi from "@/lib/api/messaging";
 
 vi.mock("@/store/useAuthStore", () => ({
   default: () => ({
@@ -57,9 +58,53 @@ vi.mock("@/lib/api/messaging", () => ({
 
 window.HTMLElement.prototype.scrollIntoView = vi.fn();
 
+const baseConversations = [
+  {
+    id: "conv-1",
+    subjectType: null,
+    subjectId: null,
+    createdAt: "2024-01-01T00:00:00Z",
+    updatedAt: "2024-01-01T00:00:00Z",
+    participants: [
+      { userId: "test-user", role: "member", lastReadAt: null, joinedAt: "2024-01-01T00:00:00Z" },
+      { userId: "user-1", role: "member", lastReadAt: null, joinedAt: "2024-01-01T00:00:00Z" },
+    ],
+    lastMessage: { text: "Hey there!", senderId: "user-1", createdAt: "2024-01-01T00:00:00Z" },
+    unreadCount: 0,
+  },
+  {
+    id: "conv-2",
+    subjectType: null,
+    subjectId: null,
+    createdAt: "2024-01-01T00:00:00Z",
+    updatedAt: "2024-01-01T00:00:00Z",
+    participants: [
+      { userId: "test-user", role: "member", lastReadAt: null, joinedAt: "2024-01-01T00:00:00Z" },
+      { userId: "user-2", role: "member", lastReadAt: null, joinedAt: "2024-01-01T00:00:00Z" },
+    ],
+    lastMessage: null,
+    unreadCount: 2,
+  },
+];
+
 describe("MessagesPage", () => {
   beforeEach(() => {
     vi.useFakeTimers();
+    vi.mocked(messagingApi.fetchConversations).mockResolvedValue(
+      structuredClone(baseConversations),
+    );
+    vi.mocked(messagingApi.fetchMessages).mockResolvedValue([]);
+    vi.mocked(messagingApi.sendMessage).mockResolvedValue({
+      id: "msg-1",
+      conversationId: "conv-1",
+      senderId: "test-user",
+      body: "Hello!",
+      createdAt: "2024-01-01T01:00:00Z",
+      editedAt: null,
+      deletedAt: null,
+      attachment: null,
+    });
+    vi.mocked(messagingApi.markConversationRead).mockResolvedValue(undefined);
   });
 
   afterEach(() => {
@@ -99,7 +144,9 @@ describe("MessagesPage", () => {
       await vi.advanceTimersByTimeAsync(0);
     });
 
-    expect(screen.getByText(/Select a conversation/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText(/back to conversations/i));
+
+    expect(screen.getByText(/choose a conversation/i)).toBeInTheDocument();
   });
 
   it("shows sending state then sent state after message is sent", async () => {
@@ -118,7 +165,13 @@ describe("MessagesPage", () => {
     const sendBtn = screen.getByLabelText("Send message");
     fireEvent.click(sendBtn);
 
-    expect(screen.getByText("Hello!")).toBeInTheDocument();
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(messagingApi.sendMessage).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText("Hey there!")).not.toBeInTheDocument();
+    expect(screen.getAllByText("Hello!").length).toBeGreaterThan(0);
   });
 
   it("has accessible message thread region", async () => {
@@ -164,5 +217,31 @@ describe("MessagesPage", () => {
     fireEvent.click(sendBtn);
 
     expect(sendBtn).toBeDisabled();
+  });
+
+  it("shows a visible composer error when sending fails", async () => {
+    vi.mocked(messagingApi.sendMessage).mockRejectedValueOnce(
+      new Error("Failed to fetch"),
+    );
+
+    render(<MessagesPage />);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    const conv1 = screen.getByLabelText(/Select conversation with user-1/i);
+    fireEvent.click(conv1);
+
+    const input = screen.getByPlaceholderText(/type your message/i);
+    fireEvent.change(input, { target: { value: "Hello!" } });
+    fireEvent.click(screen.getByLabelText("Send message"));
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(messagingApi.sendMessage).toHaveBeenCalledTimes(1);
+    expect(screen.getByText(/you appear to be offline/i)).toBeInTheDocument();
   });
 });

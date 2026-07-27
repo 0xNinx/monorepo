@@ -17,46 +17,85 @@ vi.mock('next/navigation', () => ({
 }))
 
 // Mock toast functions
-const mockShowSuccessToast = vi.fn()
-const mockShowErrorToast = vi.fn()
+const mockShowSuccessToast = vi.hoisted(() => vi.fn())
+const mockShowErrorToast = vi.hoisted(() => vi.fn())
 vi.mock('@/lib/toast', () => ({
   showSuccessToast: mockShowSuccessToast,
   showErrorToast: mockShowErrorToast,
 }))
 
 // Mock API functions
-const mockApiPost = vi.fn()
+const mockGetProperty = vi.hoisted(() => vi.fn())
+const mockApiPost = vi.hoisted(() => vi.fn())
+const mockGetInspectionSummary = vi.hoisted(() => vi.fn())
+vi.mock('@/lib/propertiesApi', () => ({
+  getProperty: mockGetProperty,
+}))
 vi.mock('@/lib/api', () => ({
   apiPost: mockApiPost,
 }))
+vi.mock('@/lib/propertyInspectionApi', () => ({
+  propertyInspectionApi: {
+    getInspectionSummary: mockGetInspectionSummary,
+  },
+}))
+
+Object.defineProperty(window.HTMLElement.prototype, 'scrollIntoView', {
+ value: vi.fn(),
+ writable: true,
+})
+
+async function renderLoadedProperty() {
+  render(<PropertyDetailClient propertyId="1" />)
+  await screen.findByText('Report Listing')
+}
+
+function seedPropertyMocks() {
+  mockGetProperty.mockResolvedValue({
+    data: {
+      listingId: '1',
+      whistleblowerId: 'wb-1',
+      address: '15 Adeola Hopewell, Lagos',
+      city: 'Lagos',
+      area: 'Victoria Island',
+      bedrooms: 2,
+      bathrooms: 2,
+      annualRentNgn: 1200000,
+      description: 'Test property',
+      photos: ['https://example.com/photo.jpg'],
+      status: 'approved',
+      createdAt: '2024-01-01T00:00:00Z',
+      updatedAt: '2024-01-01T00:00:00Z',
+    },
+  })
+  mockGetInspectionSummary.mockResolvedValue(null)
+}
 
 describe('PropertyDetailClient - Regression Check', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    seedPropertyMocks()
   })
 
-  it('asserts Annual Rent section is present', () => {
-    // Use a property ID that exists in mock data
-    render(<PropertyDetailClient propertyId="1" />)
-
+  it('asserts Annual Rent section is present', async () => {
+    await renderLoadedProperty()
     // Check for Annual Rent label and pricing
-    expect(screen.getByText('Annual Rent')).toBeInTheDocument()
+    expect(screen.getAllByText('Annual Rent').length).toBeGreaterThan(0)
     // Price should be present (format varies, but should contain currency symbol)
-    const priceElement = screen.queryByText(/₦/)
-    expect(priceElement).toBeInTheDocument()
+    expect(screen.getAllByText(/₦/).length).toBeGreaterThan(0)
   })
 
-  it('asserts Listed By section is present', () => {
-    render(<PropertyDetailClient propertyId="1" />)
+  it('asserts Listed By section is present', async () => {
+    await renderLoadedProperty()
 
     // Check for Listed By section
     expect(screen.getByText('Listed By')).toBeInTheDocument()
     // Landlord name should be present
-    expect(screen.getByText(/Verified Landlord|Verification pending/)).toBeInTheDocument()
+    expect(screen.getByText('Property Owner')).toBeInTheDocument()
   })
 
-  it('asserts whistleblower section is present when data exists', () => {
-    render(<PropertyDetailClient propertyId="1" />)
+  it('asserts whistleblower section is present when data exists', async () => {
+    await renderLoadedProperty()
 
     // Check for whistleblower section (when property has whistleblower data)
     const whistleblowerSection = screen.queryByText('Reported by Resident')
@@ -71,11 +110,11 @@ describe('PropertyDetailClient - Regression Check', () => {
     }
   })
 
-  it('asserts all key sections are present together', () => {
-    render(<PropertyDetailClient propertyId="1" />)
+  it('asserts all key sections are present together', async () => {
+    await renderLoadedProperty()
 
     // Annual Rent must be present
-    expect(screen.getByText('Annual Rent')).toBeInTheDocument()
+    expect(screen.getAllByText('Annual Rent').length).toBeGreaterThan(0)
 
     // Listed By must be present
     expect(screen.getByText('Listed By')).toBeInTheDocument()
@@ -89,20 +128,20 @@ describe('PropertyDetailClient - Regression Check', () => {
 describe('PropertyDetailClient - Report Dialog', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    seedPropertyMocks()
   })
 
-  it('opens report dialog when Report Listing button is clicked', () => {
-    render(<PropertyDetailClient propertyId="1" />)
+  it('opens report dialog when Report Listing button is clicked', async () => {
+    await renderLoadedProperty()
 
     const reportButton = screen.getByText('Report Listing')
     fireEvent.click(reportButton)
 
-    expect(screen.getByText('Report Listing')).toBeInTheDocument()
     expect(screen.getByText('Report Category')).toBeInTheDocument()
   })
 
-  it('disables submit button when form is invalid', () => {
-    render(<PropertyDetailClient propertyId="1" />)
+  it('disables submit button when form is invalid', async () => {
+    await renderLoadedProperty()
 
     const reportButton = screen.getByText('Report Listing')
     fireEvent.click(reportButton)
@@ -112,7 +151,7 @@ describe('PropertyDetailClient - Report Dialog', () => {
   })
 
   it('enables submit button when form is valid', async () => {
-    render(<PropertyDetailClient propertyId="1" />)
+    await renderLoadedProperty()
 
     const reportButton = screen.getByText('Report Listing')
     fireEvent.click(reportButton)
@@ -139,7 +178,7 @@ describe('PropertyDetailClient - Report Dialog', () => {
       )
     )
 
-    render(<PropertyDetailClient propertyId="1" />)
+    await renderLoadedProperty()
 
     const reportButton = screen.getByText('Report Listing')
     fireEvent.click(reportButton)
@@ -167,7 +206,7 @@ describe('PropertyDetailClient - Report Dialog', () => {
   it('shows success state after successful submission', async () => {
     mockApiPost.mockResolvedValue({ success: true, reportId: '123' })
 
-    render(<PropertyDetailClient propertyId="1" />)
+    await renderLoadedProperty()
 
     const reportButton = screen.getByText('Report Listing')
     fireEvent.click(reportButton)
@@ -197,7 +236,7 @@ describe('PropertyDetailClient - Report Dialog', () => {
   it('shows error state on failed submission', async () => {
     mockApiPost.mockRejectedValue(new Error('Network error'))
 
-    render(<PropertyDetailClient propertyId="1" />)
+    await renderLoadedProperty()
 
     const reportButton = screen.getByText('Report Listing')
     fireEvent.click(reportButton)
@@ -227,7 +266,7 @@ describe('PropertyDetailClient - Report Dialog', () => {
   it('resets form state after successful submission', async () => {
     mockApiPost.mockResolvedValue({ success: true, reportId: '123' })
 
-    render(<PropertyDetailClient propertyId="1" />)
+    await renderLoadedProperty()
 
     const reportButton = screen.getByText('Report Listing')
     fireEvent.click(reportButton)
