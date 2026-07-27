@@ -4,7 +4,6 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Home } from "lucide-react"
-import BackendHealthCompact from "@/components/BackendHealthCompact"
 import { MobileMenu } from "@/components/ui/mobile-menu"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { CurrencyToggle } from "@/components/currency-toggle"
@@ -62,9 +61,6 @@ export function Header() {
             <ThemeToggle />
             <NotificationBell />
             <ConnectWalletButton />
-            <div className="hidden xl:block">
-              <BackendHealthCompact />
-            </div>
             <Link href="/login">
               <Button
                 variant="outline"
