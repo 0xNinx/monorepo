@@ -2131,7 +2131,7 @@ paths:
   /api/webhooks/payments/{rail}:
     post:
       summary: Payments webhook
-      description: Ingest payment provider webhook. Idempotent by (rail, externalRef). Signature validation can be enabled.
+      description: Ingest payment provider webhook. Idempotent by provider event ID plus canonical reference. Signature validation is always enforced in production and can be enabled in non-production with WEBHOOK_SIGNATURE_ENABLED=true.
       operationId: paymentsWebhook
       tags:
         - Webhooks

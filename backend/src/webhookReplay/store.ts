@@ -26,24 +26,31 @@ export class PostgresWebhookReplayStore implements IWebhookReplayStore {
   async createEvent(event: Omit<WebhookEvent, 'id' | 'receivedAt'>): Promise<WebhookEvent> {
     const pool = await getPool()
     if (!pool) throw new Error('Database not available')
-    const result = await pool.query(
-      `INSERT INTO webhook_events 
-       (provider, event_type, external_id, payload, headers, processing_status, processing_error)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
-       RETURNING id, provider, event_type, external_id, payload, headers, 
-                 received_at, processed_at, processing_status, processing_error`,
-      [
-        event.provider,
-        event.eventType,
-        event.externalId,
-        JSON.stringify(event.payload),
-        event.headers ? JSON.stringify(event.headers) : null,
-        event.processingStatus,
-        event.processingError || null,
-      ]
-    )
-
-    return this.mapRowToEvent(result.rows[0])
+    try {
+      const result = await pool.query(
+        `INSERT INTO webhook_events 
+         (provider, event_type, external_id, payload, headers, processing_status, processing_error)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
+         RETURNING id, provider, event_type, external_id, payload, headers, 
+                   received_at, processed_at, processing_status, processing_error`,
+        [
+          event.provider,
+          event.eventType,
+          event.externalId,
+          JSON.stringify(event.payload),
+          event.headers ? JSON.stringify(event.headers) : null,
+          event.processingStatus,
+          event.processingError || null,
+        ]
+      )
+      return this.mapRowToEvent(result.rows[0])
+    } catch (error) {
+      if ((error as { code?: string }).code === '23505') {
+        const existing = await this.getEventByProviderAndExternalId(event.provider, event.externalId)
+        if (existing) return existing
+      }
+      throw error
+    }
   }
 
   async getEventById(id: string): Promise<WebhookEvent | null> {
@@ -225,6 +232,11 @@ export class InMemoryWebhookReplayStore implements IWebhookReplayStore {
   private idCounter = 1
 
   async createEvent(event: Omit<WebhookEvent, 'id' | 'receivedAt'>): Promise<WebhookEvent> {
+    const existing = await this.getEventByProviderAndExternalId(event.provider, event.externalId)
+    if (existing) {
+      return existing
+    }
+
     const id = `event-${this.idCounter++}`
     const newEvent: WebhookEvent = {
       ...event,
