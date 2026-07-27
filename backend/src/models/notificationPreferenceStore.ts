@@ -23,7 +23,8 @@ export type NotificationTemplate =
   | "dispute_filed"
   | "dispute_resolved"
   | "reward_validated"
-  | "inspection_assigned";
+  | "inspection_assigned"
+  | "message_received";
 
 export const NOTIFICATION_TEMPLATES: NotificationTemplate[] = [
   "deal_status_changed",
@@ -38,6 +39,7 @@ export const NOTIFICATION_TEMPLATES: NotificationTemplate[] = [
   "dispute_resolved",
   "reward_validated",
   "inspection_assigned",
+  "message_received",
 ];
 
 /** A single opt-out: the user does not want `template` delivered on `channel`. */
