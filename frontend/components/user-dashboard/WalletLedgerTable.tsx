@@ -7,7 +7,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import type { WalletLedgerEntry } from "@/lib/mockData/userDashboard";
+import type { WalletLedgerEntry } from "@/lib/types/dashboard";
 
 function formatDateTime(iso: string) {
   const d = new Date(iso);
@@ -73,7 +73,11 @@ function statusPresentation(status: WalletLedgerEntry["status"]) {
   }
 }
 
-export function WalletLedgerTable({ entries }: { entries: WalletLedgerEntry[] }) {
+export function WalletLedgerTable({
+  entries,
+}: {
+  entries: WalletLedgerEntry[];
+}) {
   return (
     <Table>
       <TableHeader>
@@ -94,7 +98,9 @@ export function WalletLedgerTable({ entries }: { entries: WalletLedgerEntry[] })
                 {typeLabel(e.type)}
               </TableCell>
               <TableCell>
-                <div className="font-mono font-bold">{formatNgn(e.amountNgn)}</div>
+                <div className="font-mono font-bold">
+                  {formatNgn(e.amountNgn)}
+                </div>
                 {typeof e.amountUsdc === "string" && (
                   <div className="text-xs text-muted-foreground">
                     {e.amountUsdc} USDC

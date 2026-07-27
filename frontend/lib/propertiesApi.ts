@@ -40,6 +40,8 @@ export interface PropertyListing {
   updatedAt: string;
 }
 
+export type PublicListing = PropertyListing;
+
 export interface PropertySearchResponse {
   success: boolean;
   data: PropertyListing[];
@@ -57,12 +59,29 @@ export interface PropertyDetailResponse {
 export async function searchProperties(
   filters: PropertySearchFilters,
 ): Promise<PropertySearchResponse> {
-  const path = withQuery("/api/properties/search", filters as Record<string, string | number | boolean | undefined | null>);
+  const path = withQuery(
+    "/api/properties/search",
+    filters as Record<string, string | number | boolean | undefined | null>,
+  );
   return apiGet<PropertySearchResponse>(path);
 }
 
-export async function getProperty(
-  id: string,
-): Promise<PropertyDetailResponse> {
+export async function getProperty(id: string): Promise<PropertyDetailResponse> {
   return apiGet<PropertyDetailResponse>(`/api/properties/${id}`);
+}
+
+export async function listPublicListings(params?: {
+  listingIds?: string[];
+  page?: number;
+  pageSize?: number;
+}): Promise<PropertySearchResponse> {
+  const query: Record<string, string | number> = {};
+  if (params?.listingIds && params.listingIds.length > 0) {
+    query.listingIds = params.listingIds.join(",");
+  }
+  if (params?.page) query.page = params.page;
+  if (params?.pageSize) query.pageSize = params.pageSize;
+
+  const path = withQuery("/api/properties", query);
+  return apiGet<PropertySearchResponse>(path);
 }
