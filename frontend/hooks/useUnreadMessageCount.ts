@@ -28,7 +28,8 @@ export function useUnreadMessageCount() {
 
   useEffect(() => {
     mountedRef.current = true;
-    fetchCount();
+
+    const initialTimer = setTimeout(fetchCount, 0);
 
     const pollInterval = setInterval(fetchCount, 30000);
     pollTimerRef.current = pollInterval;
@@ -60,6 +61,7 @@ export function useUnreadMessageCount() {
 
     return () => {
       mountedRef.current = false;
+      clearTimeout(initialTimer);
       if (pollTimerRef.current) clearInterval(pollTimerRef.current);
       if (eventSourceRef.current) eventSourceRef.current.close();
     };

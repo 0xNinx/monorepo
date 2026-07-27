@@ -117,8 +117,8 @@ export function Header() {
   const [hydrated, setHydrated] = useState(false)
 
   useEffect(() => {
-    setHydrated(true)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    const timer = setTimeout(() => setHydrated(true), 0)
+    return () => clearTimeout(timer)
   }, [])
 
   const isAuthPage = pathname === "/login" || pathname === "/signup"
