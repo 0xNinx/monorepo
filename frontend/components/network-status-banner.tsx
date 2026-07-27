@@ -5,8 +5,10 @@ import { RefreshCcw, Trash2, Wifi, WifiOff } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   clearOfflineQueue,
+  clearOfflineQueueFailures,
   flushOfflineQueue,
   getOfflineQueueCount,
+  getOfflineQueueFailures,
 } from '@/lib/offline-queue'
 
 const baseUrl = process.env.NEXT_PUBLIC_BACKEND_URL
@@ -15,9 +17,11 @@ export function NetworkStatusBanner() {
   const [isOnline, setIsOnline] = useState(true)
   const [showBackOnline, setShowBackOnline] = useState(false)
   const [queueCount, setQueueCount] = useState(0)
+  const [failedCount, setFailedCount] = useState(0)
 
-  const syncQueueCount = () => {
+  const syncQueueState = () => {
     setQueueCount(getOfflineQueueCount())
+    setFailedCount(getOfflineQueueFailures().length)
   }
 
   const handleSync = useCallback(async () => {
@@ -26,12 +30,13 @@ export function NetworkStatusBanner() {
     }
 
     await flushOfflineQueue(baseUrl)
-    syncQueueCount()
+    syncQueueState()
   }, [])
 
   const handleClear = () => {
     clearOfflineQueue()
-    syncQueueCount()
+    clearOfflineQueueFailures()
+    syncQueueState()
   }
 
   useEffect(() => {
@@ -50,63 +55,84 @@ export function NetworkStatusBanner() {
     }
 
     const handleQueueUpdate = () => {
-      syncQueueCount()
+      syncQueueState()
     }
 
     let isMounted = true
     Promise.resolve().then(() => {
       if (isMounted) {
         setIsOnline(navigator.onLine)
-        syncQueueCount()
+        syncQueueState()
       }
     })
 
     window.addEventListener('online', handleOnline)
     window.addEventListener('offline', handleOffline)
     window.addEventListener('offline-queue-updated', handleQueueUpdate)
+    window.addEventListener('offline-queue-failures-updated', handleQueueUpdate)
 
     return () => {
       isMounted = false
       window.removeEventListener('online', handleOnline)
       window.removeEventListener('offline', handleOffline)
       window.removeEventListener('offline-queue-updated', handleQueueUpdate)
+      window.removeEventListener(
+        'offline-queue-failures-updated',
+        handleQueueUpdate,
+      )
     }
   }, [handleSync])
 
-  if (isOnline && !showBackOnline && queueCount === 0) return null
+  if (isOnline && !showBackOnline && queueCount === 0 && failedCount === 0) {
+    return null
+  }
+
+  const isFailureState = failedCount > 0
+  const bannerClassName = !isOnline
+    ? 'bg-red-500 text-white'
+    : isFailureState
+      ? 'bg-amber-500 text-black'
+      : 'bg-green-500 text-white'
+  const message = !isOnline
+    ? 'You are currently offline'
+    : isFailureState
+      ? `${failedCount} queued action${failedCount === 1 ? '' : 's'} need review`
+      : 'Back online'
 
   return (
     <div
       className={`fixed bottom-4 left-1/2 z-50 flex w-[min(95vw,40rem)] -translate-x-1/2 items-center justify-between gap-3 rounded-2xl px-4 py-3 shadow-lg transition-all duration-300 ${
-        isOnline ? 'bg-green-500 text-white' : 'bg-red-500 text-white'
+        bannerClassName
       }`}
     >
       <div className="flex items-center gap-2">
         {isOnline ? <Wifi className="h-4 w-4" /> : <WifiOff className="h-4 w-4" />}
         <span className="text-sm font-medium">
-          {isOnline ? 'Back online' : 'You are currently offline'}
+          {message}
           {queueCount > 0 ? ` • ${queueCount} queued action${queueCount === 1 ? '' : 's'}` : ''}
         </span>
       </div>
-      {queueCount > 0 ? (
+      {queueCount > 0 || failedCount > 0 ? (
         <div className="flex items-center gap-2">
-          <Button
-            variant="secondary"
-            size="sm"
-            className="h-8 bg-white/20 text-white hover:bg-white/30"
-            onClick={() => void handleSync()}
-          >
-            <RefreshCcw className="mr-2 h-3.5 w-3.5" />
-            Sync
-          </Button>
+          {queueCount > 0 && isOnline ? (
+            <Button
+              variant="secondary"
+              size="sm"
+              className="h-8 bg-white/20 text-current hover:bg-white/30"
+              onClick={() => void handleSync()}
+            >
+              <RefreshCcw className="mr-2 h-3.5 w-3.5" />
+              Sync
+            </Button>
+          ) : null}
           <Button
             variant="ghost"
             size="sm"
-            className="h-8 text-white hover:bg-white/10 hover:text-white"
+            className="h-8 text-current hover:bg-white/10 hover:text-current"
             onClick={handleClear}
           >
             <Trash2 className="mr-2 h-3.5 w-3.5" />
-            Clear
+            Clear all
           </Button>
         </div>
       ) : null}
