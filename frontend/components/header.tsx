@@ -122,9 +122,32 @@ export function Header() {
   }, [])
 
   const isAuthPage = pathname === "/login" || pathname === "/signup"
-  const isDashboard = pathname.startsWith("/dashboard")
+  const isCompactHeader = pathname.startsWith("/dashboard")
 
-  if (isAuthPage || isDashboard) return null
+  if (isAuthPage) return null
+
+  if (isCompactHeader) {
+    return (
+      <header className="sticky top-0 z-50 bg-background border-b-4 border-foreground">
+        <div className="container mx-auto px-4 sm:px-6">
+          <div className="flex h-14 items-center justify-between">
+            <Link href="/" className="flex items-center gap-2">
+              <div className="flex h-8 w-8 items-center justify-center border-3 border-foreground bg-primary shadow-[3px_3px_0px_0px_rgba(26,26,26,1)]">
+                <Home className="h-4 w-4 text-foreground" />
+              </div>
+              <span className="font-mono text-base font-black tracking-tight">
+                SHELTER<span className="text-primary">FLEX</span>
+              </span>
+            </Link>
+            <div className="flex items-center gap-2">
+              <NotificationBell />
+              {hydrated && isAuthenticated ? <AccountMenu /> : null}
+            </div>
+          </div>
+        </div>
+      </header>
+    )
+  }
 
   return (
     <header className="sticky top-0 z-50 bg-background border-b-4 border-foreground">
