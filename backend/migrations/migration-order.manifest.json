@@ -254,10 +254,6 @@
       "filename": "041_messaging.sql"
     },
     {
-      "position": 63,
-      "filename": "041_messaging.sql"
-    },
-    {
       "position": 64,
       "filename": "041_outbox_exactly_once.sql"
     },
