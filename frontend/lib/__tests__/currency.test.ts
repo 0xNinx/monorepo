@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { formatMoney, formatNgn, formatUsdc, roundCurrencyAmount } from "@/lib/currency";
+import {
+  formatByPreference,
+  formatConversionRate,
+  formatMoney,
+  formatNgn,
+  formatUsdc,
+  roundCurrencyAmount,
+} from "@/lib/currency";
 
 describe("currency formatting", () => {
   it("rounds NGN half-up to two decimals at positive boundaries", () => {
@@ -29,5 +36,21 @@ describe("currency formatting", () => {
   it("uses locale-specific symbol placement through Intl", () => {
     expect(formatNgn(1234.5, "fr-FR")).toMatch(/1[\s\u202f]234,50/);
     expect(formatNgn(1234.5, "fr-FR")).toContain("NGN");
+  });
+
+  it("formats NGN correctly for RTL locales", () => {
+    expect(formatNgn(1234.5, "ar-EG")).toContain("١٬٢٣٤٫٥٠");
+  });
+
+  it("keeps transacted values stable when toggling display currency", () => {
+    const amountNgn = "156799.505";
+    const amountUsdc = "98.000001";
+
+    expect(formatByPreference(amountNgn, amountUsdc, "NGN", "en-NG")).toBe("₦156,799.51");
+    expect(formatByPreference(amountNgn, amountUsdc, "USDC", "en-US")).toBe("98.00 USDC");
+  });
+
+  it("formats conversion rates with fixed precision and output currency label", () => {
+    expect(formatConversionRate(0.0006345, "USDC", "en-US")).toBe("0.000635 USDC");
   });
 });
