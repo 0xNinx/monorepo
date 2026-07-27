@@ -64,7 +64,6 @@ export default function UserDashboardPage() {
   const [walletError, setWalletError] = useState<string | null>(null);
 
   useEffect(() => {
-    setSavedLoading(true);
     fetchSavedListingIds()
       .then((ids) => {
         if (ids.length === 0) {
@@ -93,7 +92,6 @@ export default function UserDashboardPage() {
   }, []);
 
   useEffect(() => {
-    setAppsLoading(true);
     listTenantApplications()
       .then((res) => {
         const apps: UserRentalApplication[] = res.data.map((app) => ({
@@ -119,7 +117,6 @@ export default function UserDashboardPage() {
   }, []);
 
   useEffect(() => {
-    setWalletLoading(true);
     Promise.all([getNgnBalance(), getNgnLedger({ limit: 20 })])
       .then(([balanceRes, ledgerRes]) => {
         const balance: WalletBalance = {

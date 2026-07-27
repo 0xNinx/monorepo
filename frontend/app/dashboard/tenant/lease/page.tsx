@@ -77,7 +77,6 @@ export default function TenantLeasePage() {
     useState<DocWithContent | null>(null);
 
   useEffect(() => {
-    setLoading(true);
     getTenantCurrentLease()
       .then((res) => {
         const currentDealId = res.data.dealId;

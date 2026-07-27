@@ -55,7 +55,6 @@ export default function LandlordDashboard() {
   const [propertiesError, setPropertiesError] = useState<string | null>(null);
 
   useEffect(() => {
-    setStatsLoading(true);
     getLandlordDashboardStats()
       .then((data) => {
         setStats(data);
@@ -71,7 +70,6 @@ export default function LandlordDashboard() {
   }, []);
 
   useEffect(() => {
-    setPropertiesLoading(true);
     listLandlordProperties()
       .then(async (res) => {
         setProperties(res.properties);

@@ -79,7 +79,6 @@ export default function TenantDashboard() {
   }, []);
 
   useEffect(() => {
-    setLeaseLoading(true);
     getTenantCurrentLease()
       .then((res) => {
         setCurrentLease(res.data);
@@ -95,7 +94,6 @@ export default function TenantDashboard() {
   }, []);
 
   useEffect(() => {
-    setPaymentsLoading(true);
     Promise.all([getPaymentSchedule(), getPaymentHistory({ limit: 10 })])
       .then(([scheduleRes, historyRes]) => {
         setPaymentSchedule(scheduleRes.data.schedule || []);
@@ -112,7 +110,6 @@ export default function TenantDashboard() {
   }, []);
 
   useEffect(() => {
-    setSavedLoading(true);
     fetchSavedListingIds()
       .then((ids) => {
         if (ids.length === 0) {
