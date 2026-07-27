@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import {
@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DashboardHeader } from "@/components/dashboard-header";
-import { tenantApplicationProperties as properties } from "@/lib/mockData";
+import { getProperty, type PropertyListing } from "@/lib/propertiesApi";
 import {
   createTenantApplication,
   type TenantApplication,
@@ -38,13 +38,29 @@ export default function TenantApplicationPage() {
   const [submittedApplication, setSubmittedApplication] =
     useState<TenantApplication | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [property, setProperty] = useState<PropertyListing | null>(null);
+  const [propertyLoading, setPropertyLoading] = useState(true);
+  const [propertyError, setPropertyError] = useState<string | null>(null);
 
   const annualRent = Number(searchParams.get("amount")) || 2400000;
   const deposit = Number(searchParams.get("deposit")) || annualRent * 0.2;
   const duration = Number(searchParams.get("duration")) || 12;
   const propertyId = Number(searchParams.get("propertyId")) || 1;
 
-  const property = properties.find((p) => p.id === propertyId);
+  useEffect(() => {
+    const fetchProperty = async () => {
+      setPropertyLoading(true);
+      try {
+        const result = await getProperty(String(propertyId));
+        setProperty(result.data);
+      } catch (err: any) {
+        setPropertyError(err?.message || "Failed to load property details");
+      } finally {
+        setPropertyLoading(false);
+      }
+    };
+    fetchProperty();
+  }, [propertyId]);
   const totalAmount = annualRent - deposit;
   const monthlyPayment = totalAmount / duration;
 
@@ -64,8 +80,8 @@ export default function TenantApplicationPage() {
         deposit,
         duration,
         hasAgreedToTerms: hasAgreed,
-        propertyTitle: property?.title,
-        propertyLocation: property?.location,
+        propertyTitle: property?.address,
+        propertyLocation: [property?.city, property?.area].filter(Boolean).join(", "),
       });
 
       setSubmittedApplication(response.data);
@@ -188,34 +204,36 @@ export default function TenantApplicationPage() {
                 Property Details
               </h2>
 
-              <div className="mb-6 space-y-3">
-                <div>
-                  <h3 className="font-bold text-foreground">
-                    {property?.title}
-                  </h3>
-                  <div className="mt-1 flex items-center gap-1 text-sm text-muted-foreground">
-                    <MapPin className="h-4 w-4 shrink-0" />
-                    {property?.location}
-                  </div>
+              {propertyLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
                 </div>
+              ) : propertyError ? (
+                <p className="text-sm text-destructive py-4">{propertyError}</p>
+              ) : (
+                <div className="mb-6 space-y-3">
+                  <div>
+                    <h3 className="font-bold text-foreground">
+                      {property?.address || "Property"}
+                    </h3>
+                    <div className="mt-1 flex items-center gap-1 text-sm text-muted-foreground">
+                      <MapPin className="h-4 w-4 shrink-0" />
+                      {[property?.city, property?.area].filter(Boolean).join(", ")}
+                    </div>
+                  </div>
 
-                <div className="flex flex-wrap gap-3">
-                  <div className="flex items-center gap-1 border-2 border-foreground/30 bg-muted/50 px-2 py-1">
-                    <Bed className="h-4 w-4" />
-                    <span className="text-sm font-bold">{property?.beds}</span>
-                  </div>
-                  <div className="flex items-center gap-1 border-2 border-foreground/30 bg-muted/50 px-2 py-1">
-                    <Bath className="h-4 w-4" />
-                    <span className="text-sm font-bold">{property?.baths}</span>
-                  </div>
-                  <div className="flex items-center gap-1 border-2 border-foreground/30 bg-muted/50 px-2 py-1">
-                    <Square className="h-4 w-4" />
-                    <span className="text-sm font-bold">
-                      {property?.sqm} m²
-                    </span>
+                  <div className="flex flex-wrap gap-3">
+                    <div className="flex items-center gap-1 border-2 border-foreground/30 bg-muted/50 px-2 py-1">
+                      <Bed className="h-4 w-4" />
+                      <span className="text-sm font-bold">{property?.bedrooms}</span>
+                    </div>
+                    <div className="flex items-center gap-1 border-2 border-foreground/30 bg-muted/50 px-2 py-1">
+                      <Bath className="h-4 w-4" />
+                      <span className="text-sm font-bold">{property?.bathrooms}</span>
+                    </div>
                   </div>
                 </div>
-              </div>
+              )}
 
               {/* Payment Breakdown */}
               <div className="border-t-2 border-foreground/20 pt-6">

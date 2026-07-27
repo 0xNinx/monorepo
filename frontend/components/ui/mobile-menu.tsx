@@ -3,17 +3,33 @@
 import * as React from "react"
 import { useState } from "react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
-import { X, Menu } from "lucide-react"
+import { X, Menu, LogOut, LayoutDashboard, User } from "lucide-react"
+import useAuthStore from "@/store/useAuthStore"
 
 interface MobileMenuProps {
   navLinks: Array<{ href: string; label: string }>
   pathname: string
+  isAuthenticated?: boolean
+  user?: { name?: string; email?: string } | null
+  hydrated?: boolean
 }
 
-export function MobileMenu({ navLinks, pathname }: Readonly<MobileMenuProps>) {
+export function MobileMenu({ navLinks, pathname, isAuthenticated: authProp, user: userProp, hydrated }: Readonly<MobileMenuProps>) {
   const [isOpen, setIsOpen] = useState(false)
+  const router = useRouter()
+  const storeAuth = useAuthStore()
+  const isAuthenticated = authProp ?? storeAuth.isAuthenticated
+  const user = userProp ?? storeAuth.user
+  const displayName = user?.name || user?.email || "Account"
+
+  const handleLogout = () => {
+    storeAuth.logout()
+    setIsOpen(false)
+    router.push("/")
+  }
 
   return (
     <>
@@ -74,21 +90,59 @@ export function MobileMenu({ navLinks, pathname }: Readonly<MobileMenuProps>) {
                 ))}
               </div>
               
-              {/* Mobile Actions */}
+              {/* Mobile Auth Actions */}
               <div className="mt-8 space-y-3 px-4 border-t-3 border-foreground pt-4">
-                <Link href="/login" onClick={() => setIsOpen(false)}>
-                  <Button
-                    variant="outline"
-                    className="w-full border-3 border-foreground font-bold shadow-[4px_4px_0px_0px_rgba(26,26,26,1)] hover:shadow-[2px_2px_0px_0px_rgba(26,26,26,1)] hover:translate-x-0.5 hover:translate-y-0.5 transition-all bg-background text-foreground min-h-12"
-                  >
-                    Log In
-                  </Button>
-                </Link>
-                <Link href="/signup" onClick={() => setIsOpen(false)}>
-                  <Button className="w-full border-3 border-foreground bg-primary font-bold shadow-[4px_4px_0px_0px_rgba(26,26,26,1)] hover:shadow-[2px_2px_0px_0px_rgba(26,26,26,1)] hover:translate-x-0.5 hover:translate-y-0.5 transition-all text-foreground min-h-12">
-                    Get Started
-                  </Button>
-                </Link>
+                {!hydrated ? null : isAuthenticated ? (
+                  <>
+                    <div className="flex items-center gap-3 px-4 py-2 text-sm font-bold text-foreground/70">
+                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
+                        {displayName.charAt(0).toUpperCase()}
+                      </div>
+                      <span className="truncate">{displayName}</span>
+                    </div>
+                    <Link href="/dashboard/user" onClick={() => setIsOpen(false)}>
+                      <Button
+                        variant="outline"
+                        className="w-full justify-start border-2 border-foreground font-bold bg-background text-foreground min-h-12"
+                      >
+                        <LayoutDashboard className="mr-2 h-4 w-4" />
+                        Dashboard
+                      </Button>
+                    </Link>
+                    <Link href="/dashboard/user" onClick={() => setIsOpen(false)}>
+                      <Button
+                        variant="outline"
+                        className="w-full justify-start border-2 border-foreground font-bold bg-background text-foreground min-h-12"
+                      >
+                        <User className="mr-2 h-4 w-4" />
+                        Profile & Settings
+                      </Button>
+                    </Link>
+                    <button
+                      onClick={handleLogout}
+                      className="w-full flex items-center justify-center gap-2 border-3 border-destructive/50 bg-destructive/10 font-bold shadow-[4px_4px_0px_0px_rgba(26,26,26,1)] hover:shadow-[2px_2px_0px_0px_rgba(26,26,26,1)] hover:translate-x-0.5 hover:translate-y-0.5 transition-all text-destructive min-h-12 rounded-lg"
+                    >
+                      <LogOut className="h-4 w-4" />
+                      Log Out
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <Link href="/login" onClick={() => setIsOpen(false)}>
+                      <Button
+                        variant="outline"
+                        className="w-full border-3 border-foreground font-bold shadow-[4px_4px_0px_0px_rgba(26,26,26,1)] hover:shadow-[2px_2px_0px_0px_rgba(26,26,26,1)] hover:translate-x-0.5 hover:translate-y-0.5 transition-all bg-background text-foreground min-h-12"
+                      >
+                        Log In
+                      </Button>
+                    </Link>
+                    <Link href="/signup" onClick={() => setIsOpen(false)}>
+                      <Button className="w-full border-3 border-foreground bg-primary font-bold shadow-[4px_4px_0px_0px_rgba(26,26,26,1)] hover:shadow-[2px_2px_0px_0px_rgba(26,26,26,1)] hover:translate-x-0.5 hover:translate-y-0.5 transition-all text-foreground min-h-12">
+                        Get Started
+                      </Button>
+                    </Link>
+                  </>
+                )}
               </div>
             </nav>
           </div>

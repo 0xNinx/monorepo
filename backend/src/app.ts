@@ -171,6 +171,7 @@ import { initializeCacheInvalidationWebhooks } from "./services/cacheInvalidatio
 import { createKycWebhookRouter } from "./routes/kyc.js";
 import { createOnboardingRouter } from "./routes/onboarding.js";
 import { createEmployersRouter } from "./routes/employers.js";
+import messagingRouter from "./routes/messaging.js";
 import { MonthlyDeductionReminderJob } from "./jobs/monthlyDeductionReminderJob.js";
 import { dataRetentionPurgeJobHandler, DATA_RETENTION_PURGE_JOB_NAME } from "./jobs/dataRetentionPurgeJob.js";
 
@@ -903,6 +904,7 @@ export function createApp() {
   app.use('/api/v1', createTenantRatingCardRouter(sorobanAdapter))
 
   // Interactive API documentation
+  app.use("/api/v1/messaging", messagingRouter);
   app.use("/docs", createDocsRouter());
 
   // Backward compatibility redirect from /api/* to /api/v1/*

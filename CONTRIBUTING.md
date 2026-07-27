@@ -28,32 +28,110 @@ If you're looking for tasks to pick up, start with `docs/ISSUES_CATALOG.md`.
 
 ## Development setup
 
-### Frontend
+This repository has three independently tool-chained projects. Use the package manager and version below that matches CI.
+
+### Prerequisites
+
+- Node.js 22.x (CI uses Node 22)
+- pnpm 9.15.5 for the frontend
+- npm for the backend (CI uses `npm ci`)
+- Rust stable with `rustfmt` and `clippy` for the contracts workspace
+- Docker Desktop (optional, but useful for PostgreSQL and the full-stack compose setup)
+
+### Frontend setup (pnpm, Node 22)
 
 ```bash
 cd frontend
-npm install
-npm run dev
+corepack enable
+pnpm install --frozen-lockfile
+pnpm run lint
+pnpm run build
 ```
 
-### Backend
+- The frontend uses pnpm, not npm.
+- The authoritative lockfile is `frontend/pnpm-lock.yaml`.
+- `frontend/package-lock.json` is stale and should not be used; do not run `npm install` in this directory.
+
+### Backend setup (npm, Node 22)
 
 ```bash
 cd backend
-npm install
+npm ci
 cp .env.example .env
+# Optional but recommended for local API development:
+docker compose up postgres -d
+npm run lint
+npm run test:ci
+npm run openapi:validate
+```
+
+The backend uses npm, not pnpm. The CI job runs `npm ci` and then the lint/test/OpenAPI checks below.
+
+Required environment variables for local backend work:
+
+- `cp .env.example .env` to create a local environment file.
+- `DATABASE_URL` is required for the API server. The default example points at a local PostgreSQL instance.
+- `ENCRYPTION_KEY` is required for local encryption helpers; the example value is fine for local development.
+- `CUSTODIAL_WALLET_MASTER_KEY_V1` and `CUSTODIAL_WALLET_MASTER_KEY_V2` can be left empty for basic local development, but wallet-related flows will need real values.
+- `RESEND_API_KEY` can stay empty; OTP delivery defaults to the console provider.
+
+For local development, the easiest path is to start PostgreSQL and then run the API:
+
+```bash
+cd backend
+cp .env.example .env
+docker compose up postgres -d
 npm run dev
 ```
 
-### Contracts
+The CI test command (`npm run test:ci`) excludes the network-dependent suites, so it does not require external Soroban or webhook services to pass.
+
+### Contracts setup (Rust stable + fmt/clippy)
 
 ```bash
 cd contracts
-cargo test
-stellar contract build
+rustup toolchain install stable
+rustup component add rustfmt clippy
+cargo fmt --all -- --check
+cargo clippy --workspace --all-targets --all-features
+cargo test --workspace
 ```
 
 For Soroban CLI deployment instructions see `contracts/README.md`.
+
+## Before opening a PR (required checks)
+
+Run the CI-equivalent commands from the matching directory before you push:
+
+### Frontend checks
+
+```bash
+cd frontend
+pnpm install --frozen-lockfile
+pnpm run lint
+pnpm run build
+```
+
+### Backend checks
+
+```bash
+cd backend
+npm ci
+npm run lint
+npm run test:ci
+npm run openapi:validate
+```
+
+### Contracts checks
+
+```bash
+cd contracts
+cargo fmt --all -- --check
+cargo clippy --workspace --all-targets --all-features
+cargo test --workspace
+```
+
+If your PR changes UI, include screenshots or a short screen recording in the PR description.
 
 ## Creating an issue
 
@@ -80,47 +158,6 @@ Before opening a new issue:
 - Comment on the issue saying you’re working on it.
 - Ask clarifying questions early.
 - If you’re blocked for >24h, leave an update.
-
-## Before opening a PR (required checks)
-
-Run the checks for the area you changed.
-
-### Frontend checks
-
-```bash
-cd frontend
-npm run lint
-npm run build
-```
-
-If your PR changes UI, include **screenshots** (or a short screen recording) in the PR description.
-
-#### UI/Image change verification
-
-For PRs that modify UI components or add/change images:
-
-- Include before/after screenshots showing the changes
-- For new features, provide screenshots of different states (loading, error, success)
-- For responsive changes, include screenshots at different breakpoints (mobile, tablet, desktop)
-- Verify images are optimized and not excessively large (use tools like ImageOptim, TinyPNG, or Next.js Image component)
-- Confirm accessibility: check color contrast, alt text for images, keyboard navigation
-
-### Backend checks
-
-```bash
-cd backend
-npm run lint
-npm run typecheck
-npm run build
-```
-
-### Contracts checks
-
-```bash
-cd contracts
-cargo test
-stellar contract build
-```
 
 ## If the repository is renamed on GitHub
 

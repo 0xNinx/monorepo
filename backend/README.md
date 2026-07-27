@@ -4,14 +4,16 @@ Node.js backend for Shelterflex.
 
 ## Setup
 
-> **Package manager:** This project uses **npm**. Use `npm install` (not `pnpm` or `yarn`) to match
-> the `package-lock.json` lockfile that is committed to the repository.
+> **Package manager:** This project uses **npm**. Use `npm ci` (not `pnpm`) to match the lockfile and CI workflow.
 
 ```bash
-npm install
+npm ci
 cp .env.example .env
 npm run dev
 ```
+
+- The backend CI job runs `npm ci` from this directory.
+- For local API development, make sure PostgreSQL is available and that the environment file contains at least `DATABASE_URL` and `ENCRYPTION_KEY`.
 
 ## Testing
 

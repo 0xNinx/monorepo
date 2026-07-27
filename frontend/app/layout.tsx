@@ -1,5 +1,6 @@
 import React from "react"
 import type { Metadata } from 'next'
+import { cookies } from "next/headers"
 import { Header } from '@/components/header'
 import { Footer } from '@/components/footer'
 import { Toaster } from '@/components/ui/toaster'
@@ -18,7 +19,7 @@ import { CookieConsentBanner } from '@/components/CookieConsentBanner'
 import { Geist, Geist_Mono } from 'next/font/google'
 import './globals.css'
 import { NextIntlClientProvider } from "next-intl"
-import enMessages from "../messages/en.json"
+import { locales, defaultLocale, rtlLocales, type Locale } from "@/i18n"
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
@@ -41,13 +42,19 @@ export const metadata: Metadata = {
   },
 }
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode
 }>) {
+  const cookieStore = await cookies()
+  const cookieLocale = cookieStore.get("NEXT_LOCALE")?.value
+  const locale = locales.includes(cookieLocale as Locale) ? (cookieLocale as Locale) : defaultLocale
+  const dir = rtlLocales.includes(locale) ? "rtl" : "ltr"
+  const messages = (await import(`../messages/${locale}.json`)).default
+
   return (
-    <html suppressHydrationWarning>
+    <html suppressHydrationWarning lang={locale} dir={dir}>
       <head>
         <meta name="theme-color" content="#ff6b35" />
       </head>
@@ -58,7 +65,7 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          <NextIntlClientProvider locale="en" messages={enMessages}>
+          <NextIntlClientProvider locale={locale} messages={messages}>
             <FeatureFlagProvider>
             <CurrencyProvider>
               <WalletProvider>
