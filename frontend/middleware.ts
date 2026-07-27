@@ -1,44 +1,51 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { locales, defaultLocale } from "./i18n";
 
-export default function middleware(request: NextRequest) {
-  // Pass through the request without i18n redirection
+export function middleware(request: NextRequest) {
+  const { pathname } = request.nextUrl;
+
+  // Skip API routes, static files, and Next.js internals
+  if (
+    pathname.startsWith("/api") ||
+    pathname.startsWith("/_next") ||
+    pathname.startsWith("/static") ||
+    pathname.includes(".") ||
+    pathname === "/favicon.ico"
+  ) {
+    return NextResponse.next();
+  }
+
+  // Check for locale in cookie
+  const cookieLocale = request.cookies.get("NEXT_LOCALE")?.value;
+  const validCookieLocale =
+    cookieLocale && locales.includes(cookieLocale as typeof locales[number]);
+
+  // Get preferred locale from Accept-Language header as fallback
+  const acceptLanguage = request.headers.get("Accept-Language") || "";
+  const browserLocale = acceptLanguage.split(",")[0]?.split("-")[0]?.toLowerCase() || "";
+  const validBrowserLocale = browserLocale && locales.includes(browserLocale as typeof locales[number]);
+
+  // Determine active locale: cookie > browser > default
+  const locale = validCookieLocale
+    ? cookieLocale
+    : validBrowserLocale
+      ? browserLocale
+      : defaultLocale;
+
+  // Set the NEXT_LOCALE cookie if it's not already set or has changed
   const response = NextResponse.next();
-
-  // Content Security Policy
-  const backendUrl = "http://localhost:4000"; // Hardcoded for local development
-  const cspHeader = [
-    "default-src 'self'",
-    `connect-src 'self' ${backendUrl} https://horizon.stellar.org https://horizon-testnet.stellar.org`,
-    "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://vercel.live",
-    "style-src 'self' 'unsafe-inline'",
-    "img-src 'self' data: blob: https://vercel.live",
-    "font-src 'self' data:",
-    "object-src 'none'",
-    "base-uri 'self'",
-    "form-action 'self'",
-    "frame-ancestors 'none'",
-    "upgrade-insecure-requests",
-  ].join("; ");
-
-  // Security Headers
-  response.headers.set("Content-Security-Policy", cspHeader);
-  response.headers.set("X-Frame-Options", "DENY");
-  response.headers.set("X-Content-Type-Options", "nosniff");
-  response.headers.set("X-XSS-Protection", "1; mode=block");
-  response.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
-  response.headers.set(
-    "Permissions-Policy",
-    "camera=(), microphone=(), geolocation=()",
-  );
-  response.headers.set(
-    "Strict-Transport-Security",
-    "max-age=31536000; includeSubDomains",
-  );
+  if (!cookieLocale || cookieLocale !== locale) {
+    response.cookies.set("NEXT_LOCALE", locale, {
+      path: "/",
+      maxAge: 60 * 60 * 24 * 365,
+      sameSite: "lax",
+    });
+  }
 
   return response;
 }
 
 export const config = {
-  matcher: ["/((?!api|_next/static|_next/image|favicon.ico).*)"],
+  matcher: ["/((?!api|_next/static|_next/image|favicon.ico|.*\\..*).*)"],
 };
