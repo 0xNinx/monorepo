@@ -45,15 +45,24 @@ vi.mock("@/lib/csvExport", () => ({
 vi.mock("@/lib/walletApi", () => ({
   getNgnBalance: vi.fn(),
   getNgnLedger: vi.fn(),
+  getMultiCurrencyBalance: vi.fn(),
+  getConversionQuote: vi.fn(),
 }));
 
 import { useSearchParams } from "next/navigation";
-import { getNgnBalance, getNgnLedger } from "@/lib/walletApi";
+import {
+  getConversionQuote,
+  getMultiCurrencyBalance,
+  getNgnBalance,
+  getNgnLedger,
+} from "@/lib/walletApi";
 import { downloadCsv } from "@/lib/csvExport";
 
 type MockUseSearchParams = Mock<typeof useSearchParams>;
 type MockGetNgnBalance = Mock<typeof getNgnBalance>;
 type MockGetNgnLedger = Mock<typeof getNgnLedger>;
+type MockGetMultiCurrencyBalance = Mock<typeof getMultiCurrencyBalance>;
+type MockGetConversionQuote = Mock<typeof getConversionQuote>;
 type MockDownloadCsv = Mock<typeof downloadCsv>;
 
 function ledgerEntry(overrides?: Partial<{ id: string; type: string }>) {
@@ -76,6 +85,27 @@ describe("Wallet CSV export", () => {
 
     const mockLedger = getNgnLedger as MockGetNgnLedger;
     mockLedger.mockResolvedValue({ entries: [ledgerEntry()], nextCursor: null });
+
+    const mockMultiCurrencyBalance = getMultiCurrencyBalance as MockGetMultiCurrencyBalance;
+    mockMultiCurrencyBalance.mockResolvedValue({
+      balances: [
+        { currency: "NGN", available: 0, held: 0, total: 0 },
+        { currency: "USDC", available: 0, held: 0, total: 0 },
+        { currency: "REWARDS", available: 0, held: 0, total: 0 },
+      ],
+    });
+
+    const mockConversionQuote = getConversionQuote as MockGetConversionQuote;
+    mockConversionQuote.mockResolvedValue({
+      quoteId: "q-1",
+      fromCurrency: "NGN",
+      toCurrency: "USDC",
+      fromAmount: 1,
+      estimatedToAmount: 0.001,
+      rate: 0.001,
+      fees: 0.01,
+      expiresAt: "2026-01-01T00:10:00.000Z",
+    });
 
     const mockUseSearchParams = useSearchParams as MockUseSearchParams;
     mockUseSearchParams.mockReturnValue(new URLSearchParams() as any);

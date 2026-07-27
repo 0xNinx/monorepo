@@ -1,6 +1,7 @@
 import React from "react";
 import { Loader2, CheckCircle2 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
+import { formatUsdc } from "@/lib/currency";
 
 // Type definitions
 export interface StakingPosition {
@@ -93,13 +94,6 @@ function ConfirmedStatus({ position }: ConfirmedStatusProps) {
     });
   };
 
-  const formatAmount = (amount: number) => {
-    return amount.toLocaleString("en-US", {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 6,
-    });
-  };
-
   return (
     <Card className="border-green-200 bg-green-50/50">
       <CardContent className="space-y-4 py-6">
@@ -118,7 +112,7 @@ function ConfirmedStatus({ position }: ConfirmedStatusProps) {
         <div className="space-y-3 rounded-lg border border-green-200 bg-white p-4">
           <div className="flex justify-between">
             <span className="text-sm text-muted-foreground">Staked Amount</span>
-            <span className="font-medium">{formatAmount(position.amount)} USDC</span>
+            <span className="font-medium">{formatUsdc(position.amount)}</span>
           </div>
 
           <div className="flex justify-between">
