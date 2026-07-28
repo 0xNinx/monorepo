@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
@@ -125,6 +125,20 @@ export default function PropertyDetailClient({
   const lightboxRef = useRef<HTMLDivElement>(null);
   const mainGalleryRef = useRef<HTMLDivElement>(null);
 
+  const property = properties.find((p) => p.id === Number.parseInt(propertyId));
+
+  const nextImage = useCallback(() => {
+    if (!property) return;
+    setActiveImageIndex((prev) => (prev + 1) % property.images.length);
+  }, [property]);
+
+  const prevImage = useCallback(() => {
+    if (!property) return;
+    setActiveImageIndex(
+      (prev) => (prev - 1 + property.images.length) % property.images.length,
+    );
+  }, [property]);
+
   // Handle keyboard navigation for lightbox
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -148,7 +162,7 @@ export default function PropertyDetailClient({
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [showLightbox, activeImageIndex]);
+  }, [showLightbox, nextImage, prevImage]);
 
   // Handle keyboard navigation for main gallery
   useEffect(() => {
@@ -169,7 +183,7 @@ export default function PropertyDetailClient({
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [showLightbox, activeImageIndex]);
+  }, [showLightbox, nextImage, prevImage]);
 
   // Focus lightbox when opened
   useEffect(() => {
@@ -293,16 +307,6 @@ export default function PropertyDetailClient({
   const monthlyPayment = Math.round(
     (amountToFinance + inspectionFee) / paymentMonths,
   );
-
-  const nextImage = () => {
-    setActiveImageIndex((prev) => (prev + 1) % property.images.length);
-  };
-
-  const prevImage = () => {
-    setActiveImageIndex(
-      (prev) => (prev - 1 + property.images.length) % property.images.length,
-    );
-  };
 
   const handleReportSubmit = async () => {
     if (!reportCategory || !reportDetails.trim()) return;

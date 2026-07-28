@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   Users,
   Activity,
@@ -73,7 +73,10 @@ export function AdminAnalyticsClient() {
   const [quality, setQuality] = useState<ListingQualityMetrics | null>(null);
   const [revenueRange, setRevenueRange] = useState<"7d" | "30d" | "90d">("30d");
 
-  const loadData = async (isRefresh = false) => {
+  const revenueRangeRef = useRef(revenueRange);
+  revenueRangeRef.current = revenueRange;
+
+  const loadData = useCallback(async (isRefresh = false) => {
     if (isRefresh) {
       setRefreshing(true);
     } else {
@@ -85,7 +88,7 @@ export function AdminAnalyticsClient() {
       const [overviewRes, funnelRes, revenueRes, qualityRes] = await Promise.all([
         getAnalyticsOverview(),
         getDealFunnel(),
-        getRevenueTimeline(revenueRange),
+        getRevenueTimeline(revenueRangeRef.current),
         getListingQuality(),
       ]);
 
@@ -100,11 +103,11 @@ export function AdminAnalyticsClient() {
       setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [loadData]);
 
   const handleRangeChange = async (range: "7d" | "30d" | "90d") => {
     setRevenueRange(range);
