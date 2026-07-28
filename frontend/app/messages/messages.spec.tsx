@@ -10,35 +10,41 @@ vi.mock("@/store/useAuthStore", () => ({
 }));
 
 vi.mock("@/lib/api/messaging", () => ({
-  fetchConversations: vi.fn().mockResolvedValue([
-    {
-      id: "conv-1",
-      subjectType: null,
-      subjectId: null,
-      createdAt: "2024-01-01T00:00:00Z",
-      updatedAt: "2024-01-01T00:00:00Z",
-      participants: [
-        { userId: "test-user", role: "member", lastReadAt: null, joinedAt: "2024-01-01T00:00:00Z" },
-        { userId: "user-1", role: "member", lastReadAt: null, joinedAt: "2024-01-01T00:00:00Z" },
-      ],
-      lastMessage: { text: "Hey there!", senderId: "user-1", createdAt: "2024-01-01T00:00:00Z" },
-      unreadCount: 0,
-    },
-    {
-      id: "conv-2",
-      subjectType: null,
-      subjectId: null,
-      createdAt: "2024-01-01T00:00:00Z",
-      updatedAt: "2024-01-01T00:00:00Z",
-      participants: [
-        { userId: "test-user", role: "member", lastReadAt: null, joinedAt: "2024-01-01T00:00:00Z" },
-        { userId: "user-2", role: "member", lastReadAt: null, joinedAt: "2024-01-01T00:00:00Z" },
-      ],
-      lastMessage: null,
-      unreadCount: 2,
-    },
-  ]),
-  fetchMessages: vi.fn().mockResolvedValue([]),
+  fetchConversations: vi.fn().mockResolvedValue({
+    items: [
+      {
+        id: "conv-1",
+        subjectType: null,
+        subjectId: null,
+        createdAt: "2024-01-01T00:00:00Z",
+        updatedAt: "2024-01-01T00:00:00Z",
+        participants: [
+          { userId: "test-user", role: "member", lastReadAt: null, joinedAt: "2024-01-01T00:00:00Z" },
+          { userId: "user-1", role: "member", lastReadAt: null, joinedAt: "2024-01-01T00:00:00Z" },
+        ],
+        lastMessage: { text: "Hey there!", senderId: "user-1", createdAt: "2024-01-01T00:00:00Z" },
+        unreadCount: 0,
+      },
+      {
+        id: "conv-2",
+        subjectType: null,
+        subjectId: null,
+        createdAt: "2024-01-01T00:00:00Z",
+        updatedAt: "2024-01-01T00:00:00Z",
+        participants: [
+          { userId: "test-user", role: "member", lastReadAt: null, joinedAt: "2024-01-01T00:00:00Z" },
+          { userId: "user-2", role: "member", lastReadAt: null, joinedAt: "2024-01-01T00:00:00Z" },
+        ],
+        lastMessage: null,
+        unreadCount: 2,
+      },
+    ],
+    nextCursor: null,
+  }),
+  fetchMessages: vi.fn().mockResolvedValue({
+    items: [],
+    nextCursor: null,
+  }),
   sendMessage: vi.fn().mockResolvedValue({
     id: "msg-1",
     conversationId: "conv-1",

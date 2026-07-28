@@ -20,6 +20,7 @@ export const sendMessageSchema = z.object({
 export const conversationFiltersSchema = z.object({
   cursor: z.string().optional(),
   limit: z.coerce.number().int().min(1).max(100).default(50),
+  search: z.string().optional(),
 })
 
 export const messageQuerySchema = z.object({

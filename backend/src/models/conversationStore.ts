@@ -11,14 +11,24 @@ import {
 } from './conversation.js'
 import { getPool, type PgPoolLike } from '../db.js'
 
+interface PaginatedConversations {
+  items: ConversationWithLastMessage[];
+  nextCursor: string | null;
+}
+
+interface PaginatedMessages {
+  items: Message[];
+  nextCursor: string | null;
+}
+
 interface ConversationStorePort {
   createConversation(input: CreateConversationInput): Promise<Conversation>
   findOrCreateConversation(input: CreateConversationInput): Promise<Conversation>
   getConversation(id: string, userId: string): Promise<Conversation | null>
-  listConversations(userId: string, filter?: ConversationFilter): Promise<ConversationWithLastMessage[]>
+  listConversations(userId: string, filter?: ConversationFilter): Promise<PaginatedConversations>
   getUnreadCount(userId: string): Promise<number>
   sendMessage(input: SendMessageInput): Promise<Message>
-  getMessages(conversationId: string, userId: string, cursor?: string, limit?: number): Promise<Message[]>
+  getMessages(conversationId: string, userId: string, cursor?: string, limit?: number): Promise<PaginatedMessages>
   markRead(conversationId: string, userId: string): Promise<void>
   isParticipant(conversationId: string, userId: string): Promise<boolean>
   clear(): Promise<void>
@@ -71,12 +81,21 @@ class InMemoryConversationStore implements ConversationStorePort {
     return conv
   }
 
-  async listConversations(userId: string, filter?: ConversationFilter): Promise<ConversationWithLastMessage[]> {
+  async listConversations(userId: string, filter?: ConversationFilter): Promise<PaginatedConversations> {
     const result: ConversationWithLastMessage[] = []
     const limit = filter?.limit ?? 50
+    const search = filter?.search?.toLowerCase()
 
     for (const conv of this.conversations.values()) {
       if (!conv.participants.some(p => p.userId === userId)) continue
+
+      if (search) {
+        const hasMatch = conv.participants.some(p =>
+          p.userId.toLowerCase().includes(search)
+        )
+        if (!hasMatch) continue
+      }
+
       const messages = this.messagesMap.get(conv.id) ?? []
       const lastMsg = messages.length > 0 ? messages[messages.length - 1] : null
       const participant = conv.participants.find(p => p.userId === userId)
@@ -92,7 +111,19 @@ class InMemoryConversationStore implements ConversationStorePort {
     }
 
     result.sort((a, b) => (b.lastMessage?.createdAt ?? b.createdAt).localeCompare(a.lastMessage?.createdAt ?? a.createdAt))
-    return result.slice(0, limit)
+
+    if (filter?.cursor) {
+      const cursorIdx = result.findIndex(c => c.id === filter.cursor)
+      if (cursorIdx >= 0) {
+        const paginated = result.slice(cursorIdx + 1, cursorIdx + 1 + limit + 1)
+        const hasMore = paginated.length > limit
+        return { items: paginated.slice(0, limit), nextCursor: hasMore ? paginated[limit - 1].id : null }
+      }
+    }
+
+    const paginated = result.slice(0, limit + 1)
+    const hasMore = paginated.length > limit
+    return { items: paginated.slice(0, limit), nextCursor: hasMore ? paginated[limit - 1].id : null }
   }
 
   async getUnreadCount(userId: string): Promise<number> {
@@ -129,10 +160,10 @@ class InMemoryConversationStore implements ConversationStorePort {
     return msg
   }
 
-  async getMessages(conversationId: string, userId: string, cursor?: string, limit = 50): Promise<Message[]> {
+  async getMessages(conversationId: string, userId: string, cursor?: string, limit = 50): Promise<PaginatedMessages> {
     const conv = this.conversations.get(conversationId)
-    if (!conv) return []
-    if (!conv.participants.some(p => p.userId === userId)) return []
+    if (!conv) return { items: [], nextCursor: null }
+    if (!conv.participants.some(p => p.userId === userId)) return { items: [], nextCursor: null }
     const messages = this.messagesMap.get(conversationId) ?? []
     let filtered = [...messages].reverse()
     if (cursor) {
@@ -141,7 +172,9 @@ class InMemoryConversationStore implements ConversationStorePort {
         filtered = filtered.slice(cursorIdx + 1)
       }
     }
-    return filtered.slice(0, limit)
+    const paginated = filtered.slice(0, limit + 1)
+    const hasMore = paginated.length > limit
+    return { items: paginated.slice(0, limit), nextCursor: hasMore ? paginated[limit - 1].id : null }
   }
 
   async markRead(conversationId: string, userId: string): Promise<void> {
@@ -193,7 +226,7 @@ class HybridConversationStore implements ConversationStorePort {
     return this.inner.getConversation(id, userId)
   }
 
-  async listConversations(userId: string, filter?: ConversationFilter): Promise<ConversationWithLastMessage[]> {
+  async listConversations(userId: string, filter?: ConversationFilter): Promise<PaginatedConversations> {
     return this.inner.listConversations(userId, filter)
   }
 
@@ -205,7 +238,7 @@ class HybridConversationStore implements ConversationStorePort {
     return this.inner.sendMessage(input)
   }
 
-  async getMessages(conversationId: string, userId: string, cursor?: string, limit?: number): Promise<Message[]> {
+  async getMessages(conversationId: string, userId: string, cursor?: string, limit?: number): Promise<PaginatedMessages> {
     return this.inner.getMessages(conversationId, userId, cursor, limit)
   }
 

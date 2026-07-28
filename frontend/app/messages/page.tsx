@@ -8,10 +8,6 @@ import {
   Send,
   Paperclip,
   MoreVertical,
-  Phone,
-  Video,
-  Building2,
-  CheckCheck,
   Clock,
   ImageIcon,
   File,
@@ -26,9 +22,9 @@ import {
   Upload,
   Download,
   Users,
+  ArrowDown,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
   DropdownMenu,
@@ -91,14 +87,14 @@ function formatTimestamp(isoString: string): string {
   return date.toLocaleDateString();
 }
 
-function apiMessageToLocal(msg: ApiMessage, currentUserId: string): LocalMessage {
+function apiMessageToLocal(_msg: ApiMessage): LocalMessage {
   return {
-    id: msg.id,
-    senderId: msg.senderId,
-    body: msg.body,
-    createdAt: msg.createdAt,
+    id: _msg.id,
+    senderId: _msg.senderId,
+    body: _msg.body,
+    createdAt: _msg.createdAt,
     status: "sent",
-    attachment: msg.attachment,
+    attachment: _msg.attachment,
   };
 }
 
@@ -115,7 +111,9 @@ export default function MessagesPage() {
   const { isAuthenticated, user } = useAuthStore();
   const currentUserId = user?.id ?? "";
   const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState("");
+  const [searchInput, setSearchInput] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [isSearching, setIsSearching] = useState(false);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
 
   const newMessage = selectedConversationId !== null ? drafts[selectedConversationId] || "" : "";
@@ -129,24 +127,56 @@ export default function MessagesPage() {
   const [messages, setMessages] = useState<LocalMessage[]>([]);
   const [isLoadingConversations, setIsLoadingConversations] = useState(true);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
+  const [isLoadingMoreMessages, setIsLoadingMoreMessages] = useState(false);
   const [conversationsError, setConversationsError] = useState<string | null>(null);
   const [messagesError, setMessagesError] = useState<string | null>(null);
   const [isSending, setIsSending] = useState(false);
   const [uploadState, setUploadState] = useState<UploadState | null>(null);
 
+  const [hasMoreConversations, setHasMoreConversations] = useState(false);
+  const [conversationCursor, setConversationCursor] = useState<string | null>(null);
+  const [hasMoreMessages, setHasMoreMessages] = useState(false);
+  const [messageCursor, setMessageCursor] = useState<string | null>(null);
+  const [isAtBottom, setIsAtBottom] = useState(true);
+  const [showJumpToLatest, setShowJumpToLatest] = useState(false);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messageContainerRef = useRef<HTMLDivElement>(null);
+  const conversationContainerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const uploadAbortRef = useRef<AbortController | null>(null);
   const pollTimerRef = useRef<NodeJS.Timeout | null>(null);
   const idempotencyKeyRef = useRef<string>(generateIdempotencyKey());
+  const searchTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const prependHeightRef = useRef<number | null>(null);
+  const shouldAutoScrollRef = useRef(true);
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
+  const scrollToBottom = useCallback((behavior: ScrollBehavior = "smooth") => {
+    messagesEndRef.current?.scrollIntoView({ behavior });
+  }, []);
 
   useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
+    if (isAtBottom) {
+      scrollToBottom();
+    }
+  }, [messages, isAtBottom, scrollToBottom]);
+
+  const handleDebouncedSearch = useCallback((value: string) => {
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    if (value.trim()) {
+      setIsSearching(true);
+    }
+    searchTimerRef.current = setTimeout(() => {
+      setDebouncedSearch(value.trim());
+      if (!value.trim()) setIsSearching(false);
+    }, 300);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     if (!isAuthenticated) return;
@@ -155,20 +185,37 @@ export default function MessagesPage() {
       setIsLoadingConversations(true);
       setConversationsError(null);
       try {
-        const data = await fetchConversations();
-        setConversations(data);
-        if (data.length > 0 && !selectedConversationId) {
-          setSelectedConversationId(data[0].id);
+        const result = await fetchConversations(undefined, 50, debouncedSearch || undefined);
+        setConversations(result.items);
+        setConversationCursor(result.nextCursor);
+        setHasMoreConversations(result.nextCursor !== null);
+        if (result.items.length > 0 && !selectedConversationId) {
+          setSelectedConversationId(result.items[0].id);
         }
       } catch (err) {
         setConversationsError((err as Error).message || "Failed to load conversations");
       } finally {
         setIsLoadingConversations(false);
+        setIsSearching(false);
       }
     };
 
     loadConversations();
-  }, [isAuthenticated]);
+  }, [isAuthenticated, debouncedSearch]);
+
+  const loadMoreConversations = useCallback(async () => {
+    if (!hasMoreConversations || !conversationCursor || isLoadingConversations) return;
+    setIsLoadingConversations(true);
+    try {
+      const result = await fetchConversations(conversationCursor, 50, debouncedSearch || undefined);
+      setConversations(prev => [...prev, ...result.items]);
+      setConversationCursor(result.nextCursor);
+      setHasMoreConversations(result.nextCursor !== null);
+    } catch {
+    } finally {
+      setIsLoadingConversations(false);
+    }
+  }, [hasMoreConversations, conversationCursor, isLoadingConversations, debouncedSearch]);
 
   useEffect(() => {
     if (!selectedConversationId || !isAuthenticated) return;
@@ -176,9 +223,15 @@ export default function MessagesPage() {
     const loadMessages = async () => {
       setIsLoadingMessages(true);
       setMessagesError(null);
+      setHasMoreMessages(false);
+      setMessageCursor(null);
+      setIsAtBottom(true);
+      setShowJumpToLatest(false);
       try {
-        const data = await fetchMessages(selectedConversationId);
-        setMessages(data.map(m => apiMessageToLocal(m, currentUserId)));
+        const result = await fetchMessages(selectedConversationId, undefined, 50);
+        setMessages(result.items.map(m => apiMessageToLocal(m)));
+        setMessageCursor(result.nextCursor);
+        setHasMoreMessages(result.nextCursor !== null);
         await markConversationRead(selectedConversationId);
         setConversations(prev =>
           prev.map(c =>
@@ -196,12 +249,12 @@ export default function MessagesPage() {
 
     const pollInterval = setInterval(async () => {
       try {
-        const data = await fetchMessages(selectedConversationId);
+        const result = await fetchMessages(selectedConversationId, undefined, 50);
         setMessages(prev => {
           const existingIds = new Set(prev.map(m => m.id));
-          const newMsgs = data
+          const newMsgs = result.items
             .filter(m => !existingIds.has(m.id))
-            .map(m => apiMessageToLocal(m, currentUserId));
+            .map(m => apiMessageToLocal(m));
           return newMsgs.length > 0 ? [...prev, ...newMsgs] : prev;
         });
       } catch {
@@ -218,12 +271,12 @@ export default function MessagesPage() {
         if (pollTimerRef.current) clearInterval(pollTimerRef.current);
         const interval = setInterval(async () => {
           try {
-            const data = await fetchMessages(selectedConversationId);
+            const result = await fetchMessages(selectedConversationId, undefined, 50);
             setMessages(prev => {
               const existingIds = new Set(prev.map(m => m.id));
-              const newMsgs = data
+              const newMsgs = result.items
                 .filter(m => !existingIds.has(m.id))
-                .map(m => apiMessageToLocal(m, currentUserId));
+                .map(m => apiMessageToLocal(m));
               return newMsgs.length > 0 ? [...prev, ...newMsgs] : prev;
             });
           } catch {
@@ -241,6 +294,54 @@ export default function MessagesPage() {
     };
   }, [selectedConversationId, isAuthenticated, currentUserId]);
 
+  const loadOlderMessages = useCallback(async () => {
+    if (!hasMoreMessages || !messageCursor || !selectedConversationId || isLoadingMoreMessages) return;
+    setIsLoadingMoreMessages(true);
+    try {
+      const container = messageContainerRef.current;
+      const prevScrollHeight = container?.scrollHeight ?? 0;
+
+      const result = await fetchMessages(selectedConversationId, messageCursor, 50);
+      const olderMessages = result.items.map(m => apiMessageToLocal(m));
+      setMessages(prev => [...olderMessages, ...prev]);
+      setMessageCursor(result.nextCursor);
+      setHasMoreMessages(result.nextCursor !== null);
+
+      requestAnimationFrame(() => {
+        if (container) {
+          const newScrollHeight = container.scrollHeight;
+          const heightDiff = newScrollHeight - prevScrollHeight;
+          container.scrollTop += heightDiff;
+        }
+      });
+    } catch {
+    } finally {
+      setIsLoadingMoreMessages(false);
+    }
+  }, [hasMoreMessages, messageCursor, selectedConversationId, isLoadingMoreMessages]);
+
+  const handleConversationScroll = useCallback(() => {
+    const container = conversationContainerRef.current;
+    if (!container) return;
+    const atBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 50;
+    if (atBottom) {
+      loadMoreConversations();
+    }
+  }, [loadMoreConversations]);
+
+  const handleMessageScroll = useCallback(() => {
+    const container = messageContainerRef.current;
+    if (!container) return;
+
+    const atBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 50;
+    setIsAtBottom(atBottom);
+    setShowJumpToLatest(!atBottom);
+
+    if (container.scrollTop < 100 && hasMoreMessages && !isLoadingMoreMessages) {
+      loadOlderMessages();
+    }
+  }, [hasMoreMessages, isLoadingMoreMessages, loadOlderMessages]);
+
   const handleSelectConversation = useCallback((id: string) => {
     if (pollTimerRef.current) clearInterval(pollTimerRef.current);
     setSelectedConversationId(id);
@@ -248,6 +349,12 @@ export default function MessagesPage() {
     setIsLoadingMessages(true);
     setMessagesError(null);
   }, []);
+
+  const handleJumpToLatest = useCallback(() => {
+    scrollToBottom("instant");
+    setIsAtBottom(true);
+    setShowJumpToLatest(false);
+  }, [scrollToBottom]);
 
   const handleFileSelect = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -329,6 +436,7 @@ export default function MessagesPage() {
     setNewMessage("");
     setUploadState(null);
     setIsSending(true);
+    setIsAtBottom(true);
 
     const key = idempotencyKeyRef.current;
     idempotencyKeyRef.current = generateIdempotencyKey();
@@ -336,7 +444,7 @@ export default function MessagesPage() {
     try {
       const sent = await sendMessage(selectedConversationId, text || "sent", key, attachment);
       setMessages(prev =>
-        prev.map(m => m.id === optimisticMsg.id ? { ...apiMessageToLocal(sent, currentUserId), status: "sent" as const } : m),
+        prev.map(m => m.id === optimisticMsg.id ? { ...apiMessageToLocal(sent), status: "sent" as const } : m),
       );
       setConversations(prev => prev.map(c => ({
         ...c,
@@ -368,7 +476,7 @@ export default function MessagesPage() {
         failedMsg.attachment ?? undefined,
       );
       setMessages(prev =>
-        prev.map(m => m.id === failedMsg.id ? { ...apiMessageToLocal(sent, currentUserId), status: "sent" as const } : m),
+        prev.map(m => m.id === failedMsg.id ? { ...apiMessageToLocal(sent), status: "sent" as const } : m),
       );
     } catch {
       setMessages(prev =>
@@ -379,14 +487,10 @@ export default function MessagesPage() {
     }
   }, [isSending, selectedConversationId, currentUserId]);
 
-  const filteredConversations = conversations.filter(conv => {
-    if (!searchQuery) return true;
-    const q = searchQuery.toLowerCase();
-    const name = getParticipantName(conv, currentUserId).toLowerCase();
-    return name.includes(q);
-  });
-
   const selectedConv = conversations.find(c => c.id === selectedConversationId);
+  const hasSearchResults = conversations.length > 0;
+  const showNoResults = !isLoadingConversations && !conversationsError && debouncedSearch && !hasSearchResults;
+  const showNoConversations = !isLoadingConversations && !conversationsError && !debouncedSearch && !hasSearchResults;
 
   if (!isAuthenticated) {
     return (
@@ -433,15 +537,22 @@ export default function MessagesPage() {
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               placeholder="Search conversations..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              value={searchInput}
+              onChange={(e) => {
+                setSearchInput(e.target.value);
+                handleDebouncedSearch(e.target.value);
+              }}
               className="border-3 border-foreground pl-10 shadow-[4px_4px_0px_0px_rgba(26,26,26,1)]"
             />
           </div>
         </div>
 
-        <div className="h-[calc(100vh-180px)] overflow-y-auto">
-          {isLoadingConversations ? (
+        <div
+          ref={conversationContainerRef}
+          onScroll={handleConversationScroll}
+          className="h-[calc(100vh-180px)] overflow-y-auto"
+        >
+          {isLoadingConversations && conversations.length === 0 ? (
             <div className="flex justify-center py-12">
               <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
             </div>
@@ -453,52 +564,69 @@ export default function MessagesPage() {
                 <RefreshCw className="mr-1 h-3 w-3" /> Retry
               </Button>
             </div>
-          ) : filteredConversations.length === 0 ? (
+          ) : showNoResults ? (
+            <div className="flex flex-col items-center justify-center px-6 py-16 text-center">
+              <div className="flex h-16 w-16 items-center justify-center border-3 border-foreground bg-muted">
+                <Search className="h-8 w-8 text-muted-foreground" />
+              </div>
+              <h3 className="mt-4 font-bold">No results found</h3>
+              <p className="mt-2 text-sm text-muted-foreground">
+                No conversations match &ldquo;{debouncedSearch}&rdquo;. Try a different search term.
+              </p>
+            </div>
+          ) : showNoConversations ? (
             <div className="flex flex-col items-center justify-center px-6 py-16 text-center">
               <div className="flex h-16 w-16 items-center justify-center border-3 border-foreground bg-muted">
                 <MessageSquareOff className="h-8 w-8 text-muted-foreground" />
               </div>
               <h3 className="mt-4 font-bold">No conversations yet</h3>
               <p className="mt-2 text-sm text-muted-foreground">
-                {searchQuery ? "Try a different search term" : "Start messaging a landlord or tenant"}
+                Start messaging a landlord or tenant
               </p>
             </div>
           ) : (
-            filteredConversations.map((conv) => {
-              const otherName = getParticipantName(conv, currentUserId);
-              return (
-                <button
-                  key={conv.id}
-                  aria-label={`Select conversation with ${otherName}`}
-                  onClick={() => handleSelectConversation(conv.id)}
-                  className={`w-full border-b-3 border-foreground p-4 text-left transition-colors ${
-                    selectedConversationId === conv.id ? "bg-muted" : "hover:bg-muted/50"
-                  }`}
-                >
-                  <div className="flex gap-3">
-                    <div className="flex h-12 w-12 shrink-0 items-center justify-center border-3 border-foreground bg-accent font-bold">
-                      {getParticipantInitials(otherName)}
-                    </div>
-                    <div className="flex-1 overflow-hidden">
-                      <div className="flex items-center justify-between">
-                        <h3 className="font-bold truncate">{otherName}</h3>
-                        <span className="text-xs text-muted-foreground shrink-0 ml-2">
-                          {conv.lastMessage ? formatTimestamp(conv.lastMessage.createdAt) : ""}
-                        </span>
+            <>
+              {conversations.map((conv) => {
+                const otherName = getParticipantName(conv, currentUserId);
+                return (
+                  <button
+                    key={conv.id}
+                    aria-label={`Select conversation with ${otherName}`}
+                    onClick={() => handleSelectConversation(conv.id)}
+                    className={`w-full border-b-3 border-foreground p-4 text-left transition-colors ${
+                      selectedConversationId === conv.id ? "bg-muted" : "hover:bg-muted/50"
+                    }`}
+                  >
+                    <div className="flex gap-3">
+                      <div className="flex h-12 w-12 shrink-0 items-center justify-center border-3 border-foreground bg-accent font-bold">
+                        {getParticipantInitials(otherName)}
                       </div>
-                      <p className="mt-1 truncate text-sm text-muted-foreground">
-                        {conv.lastMessage?.text ?? "No messages yet"}
-                      </p>
-                    </div>
-                    {conv.unreadCount > 0 && (
-                      <div className="flex h-6 w-6 shrink-0 items-center justify-center border-2 border-foreground bg-primary text-xs font-bold">
-                        {conv.unreadCount > 99 ? "99+" : conv.unreadCount}
+                      <div className="flex-1 overflow-hidden">
+                        <div className="flex items-center justify-between">
+                          <h3 className="font-bold truncate">{otherName}</h3>
+                          <span className="text-xs text-muted-foreground shrink-0 ml-2">
+                            {conv.lastMessage ? formatTimestamp(conv.lastMessage.createdAt) : ""}
+                          </span>
+                        </div>
+                        <p className="mt-1 truncate text-sm text-muted-foreground">
+                          {conv.lastMessage?.text ?? "No messages yet"}
+                        </p>
                       </div>
-                    )}
-                  </div>
-                </button>
-              );
-            })
+                      {conv.unreadCount > 0 && (
+                        <div className="flex h-6 w-6 shrink-0 items-center justify-center border-2 border-foreground bg-primary text-xs font-bold">
+                          {conv.unreadCount > 99 ? "99+" : conv.unreadCount}
+                        </div>
+                      )}
+                    </div>
+                  </button>
+                );
+              })}
+              {hasMoreConversations && (
+                <div className="flex justify-center py-4">
+                  <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                </div>
+              )}
+            </>
           )}
         </div>
       </aside>
@@ -546,7 +674,14 @@ export default function MessagesPage() {
           </div>
 
           {/* Messages Thread */}
-          <div className="flex-1 overflow-y-auto bg-muted/30 p-6" role="log" aria-live="polite" aria-label="Message thread">
+          <div
+            ref={messageContainerRef}
+            onScroll={handleMessageScroll}
+            className="relative flex-1 overflow-y-auto bg-muted/30 p-6"
+            role="log"
+            aria-live="polite"
+            aria-label="Message thread"
+          >
             <div className="mx-auto max-w-3xl space-y-4">
               {isLoadingMessages ? (
                 <div className="flex justify-center py-12">
@@ -569,55 +704,87 @@ export default function MessagesPage() {
                   <p className="text-sm text-muted-foreground">Send a message to start the conversation.</p>
                 </div>
               ) : (
-                messages.map((message) => (
-                  <div
-                    key={message.id}
-                    className={`flex ${message.senderId === currentUserId ? "justify-end" : "justify-start"}`}
-                    aria-label={`Message from ${message.senderId === currentUserId ? "you" : "other"}: ${sanitizeText(message.body).slice(0, 50)}`}
-                  >
-                    <div className={`max-w-md border-3 border-foreground p-4 ${
-                      message.senderId === currentUserId
-                        ? "bg-primary shadow-[4px_4px_0px_0px_rgba(26,26,26,1)]"
-                        : "bg-card shadow-[4px_4px_0px_0px_rgba(26,26,26,1)]"
-                    }`}>
-                      <p className="text-sm break-words">{sanitizeText(message.body)}</p>
-                      {message.attachment && (
-                        <div className="mt-2 flex items-center gap-2 border-2 border-foreground bg-muted/50 p-2">
-                          {message.attachment.type === "image" ? (
-                            <ImageIcon className="h-4 w-4 shrink-0" />
-                          ) : (
-                            <File className="h-4 w-4 shrink-0" />
+                <>
+                  {isLoadingMoreMessages && (
+                    <div className="flex justify-center py-4">
+                      <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                    </div>
+                  )}
+                  {hasMoreMessages && !isLoadingMoreMessages && (
+                    <div className="flex justify-center py-2">
+                      <button
+                        onClick={loadOlderMessages}
+                        className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                      >
+                        Load older messages
+                      </button>
+                    </div>
+                  )}
+                  {messages.map((message) => (
+                    <div
+                      key={message.id}
+                      className={`flex ${message.senderId === currentUserId ? "justify-end" : "justify-start"}`}
+                      aria-label={`Message from ${message.senderId === currentUserId ? "you" : "other"}: ${sanitizeText(message.body).slice(0, 50)}`}
+                    >
+                      <div className={`max-w-md border-3 border-foreground p-4 ${
+                        message.senderId === currentUserId
+                          ? "bg-primary shadow-[4px_4px_0px_0px_rgba(26,26,26,1)]"
+                          : "bg-card shadow-[4px_4px_0px_0px_rgba(26,26,26,1)]"
+                      }`}>
+                        <p className="text-sm break-words">{sanitizeText(message.body)}</p>
+                        {message.attachment && (
+                          <div className="mt-2 flex items-center gap-2 border-2 border-foreground bg-muted/50 p-2">
+                            {message.attachment.type === "image" ? (
+                              <ImageIcon className="h-4 w-4 shrink-0" />
+                            ) : (
+                              <File className="h-4 w-4 shrink-0" />
+                            )}
+                            <span className="text-xs truncate">{message.attachment.name}</span>
+                            <Download className="h-3 w-3 shrink-0 ml-auto text-muted-foreground" />
+                          </div>
+                        )}
+                        <div className="mt-2 flex items-center justify-end gap-1">
+                          <span className="text-xs text-muted-foreground">
+                            {formatTimestamp(message.createdAt)}
+                          </span>
+                          {message.senderId === currentUserId && (
+                            <>
+                              {message.status === "sending" && <Clock className="h-3 w-3 text-muted-foreground animate-pulse" />}
+                              {message.status === "sent" && <Clock className="h-3 w-3 text-muted-foreground" />}
+                              {message.status === "failed" && <AlertCircle className="h-3 w-3 text-destructive" />}
+                            </>
                           )}
-                          <span className="text-xs truncate">{message.attachment.name}</span>
-                          <Download className="h-3 w-3 shrink-0 ml-auto text-muted-foreground" />
                         </div>
-                      )}
-                      <div className="mt-2 flex items-center justify-end gap-1">
-                        <span className="text-xs text-muted-foreground">
-                          {formatTimestamp(message.createdAt)}
-                        </span>
-                        {message.senderId === currentUserId && (
-                          <>
-                            {message.status === "sending" && <Clock className="h-3 w-3 text-muted-foreground animate-pulse" />}
-                            {message.status === "sent" && <Clock className="h-3 w-3 text-muted-foreground" />}
-                            {message.status === "failed" && <AlertCircle className="h-3 w-3 text-destructive" />}
-                          </>
+                        {message.status === "failed" && message.senderId === currentUserId && (
+                          <div className="mt-2 flex justify-end">
+                            <Button variant="outline" size="sm" onClick={() => handleRetry(message)} disabled={isSending}
+                              className="border-2 border-destructive text-destructive text-xs font-bold">
+                              <RefreshCw className="mr-1 h-3 w-3" /> Retry
+                            </Button>
+                          </div>
                         )}
                       </div>
-                      {message.status === "failed" && message.senderId === currentUserId && (
-                        <div className="mt-2 flex justify-end">
-                          <Button variant="outline" size="sm" onClick={() => handleRetry(message)} disabled={isSending}
-                            className="border-2 border-destructive text-destructive text-xs font-bold">
-                            <RefreshCw className="mr-1 h-3 w-3" /> Retry
-                          </Button>
-                        </div>
-                      )}
                     </div>
-                  </div>
-                ))
+                  ))}
+                </>
               )}
               <div ref={messagesEndRef} />
             </div>
+
+            {/* Jump to latest button */}
+            {showJumpToLatest && (
+              <div className="sticky bottom-4 flex justify-center">
+                <Button
+                  onClick={handleJumpToLatest}
+                  variant="outline"
+                  size="sm"
+                  className="border-3 border-foreground bg-card shadow-[4px_4px_0px_0px_rgba(26,26,26,1)] hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-[2px_2px_0px_0px_rgba(26,26,26,1)]"
+                  aria-label="Jump to latest messages"
+                >
+                  <ArrowDown className="mr-1 h-3 w-3" /> Jump to latest
+                </Button>
+              </div>
+            )}
           </div>
 
           {/* Attachment Preview */}

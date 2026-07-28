@@ -62,3 +62,13 @@ export interface AttachmentUploadResult {
   name: string
   url: string
 }
+
+export interface PaginatedConversations {
+  items: ConversationWithLastMessage[]
+  nextCursor: string | null
+}
+
+export interface PaginatedMessages {
+  items: Message[]
+  nextCursor: string | null
+}
