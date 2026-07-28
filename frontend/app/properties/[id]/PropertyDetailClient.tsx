@@ -125,66 +125,6 @@ export default function PropertyDetailClient({
   const lightboxRef = useRef<HTMLDivElement>(null);
   const mainGalleryRef = useRef<HTMLDivElement>(null);
 
-  const property = properties.find((p) => p.id === Number.parseInt(propertyId));
-
-  const nextImage = useCallback(() => {
-    if (!property) return;
-    setActiveImageIndex((prev) => (prev + 1) % property.images.length);
-  }, [property]);
-
-  const prevImage = useCallback(() => {
-    if (!property) return;
-    setActiveImageIndex(
-      (prev) => (prev - 1 + property.images.length) % property.images.length,
-    );
-  }, [property]);
-
-  // Handle keyboard navigation for lightbox
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (!showLightbox) return;
-
-      switch (e.key) {
-        case "ArrowLeft":
-          e.preventDefault();
-          prevImage();
-          break;
-        case "ArrowRight":
-          e.preventDefault();
-          nextImage();
-          break;
-        case "Escape":
-          e.preventDefault();
-          setShowLightbox(false);
-          break;
-      }
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [showLightbox, nextImage, prevImage]);
-
-  // Handle keyboard navigation for main gallery
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (showLightbox) return; // Let lightbox handle it
-
-      switch (e.key) {
-        case "ArrowLeft":
-          e.preventDefault();
-          prevImage();
-          break;
-        case "ArrowRight":
-          e.preventDefault();
-          nextImage();
-          break;
-      }
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [showLightbox, nextImage, prevImage]);
-
   // Focus lightbox when opened
   useEffect(() => {
     if (showLightbox && lightboxRef.current) {
@@ -258,6 +198,64 @@ export default function PropertyDetailClient({
     },
     whistleblower: null,
   } : null;
+
+  const nextImage = useCallback(() => {
+    if (!property) return;
+    setActiveImageIndex((prev) => (prev + 1) % property.images.length);
+  }, [property]);
+
+  const prevImage = useCallback(() => {
+    if (!property) return;
+    setActiveImageIndex(
+      (prev) => (prev - 1 + property.images.length) % property.images.length,
+    );
+  }, [property]);
+
+  // Handle keyboard navigation for lightbox
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (!showLightbox) return;
+
+      switch (e.key) {
+        case "ArrowLeft":
+          e.preventDefault();
+          prevImage();
+          break;
+        case "ArrowRight":
+          e.preventDefault();
+          nextImage();
+          break;
+        case "Escape":
+          e.preventDefault();
+          setShowLightbox(false);
+          break;
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [showLightbox, nextImage, prevImage]);
+
+  // Handle keyboard navigation for main gallery
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (showLightbox) return; // Let lightbox handle it
+
+      switch (e.key) {
+        case "ArrowLeft":
+          e.preventDefault();
+          prevImage();
+          break;
+        case "ArrowRight":
+          e.preventDefault();
+          nextImage();
+          break;
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [showLightbox, nextImage, prevImage]);
 
   if (isLoadingProperty) {
     return (
