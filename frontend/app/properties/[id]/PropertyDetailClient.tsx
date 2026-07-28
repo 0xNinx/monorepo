@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
@@ -125,52 +125,6 @@ export default function PropertyDetailClient({
   const lightboxRef = useRef<HTMLDivElement>(null);
   const mainGalleryRef = useRef<HTMLDivElement>(null);
 
-  // Handle keyboard navigation for lightbox
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (!showLightbox) return;
-
-      switch (e.key) {
-        case "ArrowLeft":
-          e.preventDefault();
-          prevImage();
-          break;
-        case "ArrowRight":
-          e.preventDefault();
-          nextImage();
-          break;
-        case "Escape":
-          e.preventDefault();
-          setShowLightbox(false);
-          break;
-      }
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [showLightbox, activeImageIndex]);
-
-  // Handle keyboard navigation for main gallery
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (showLightbox) return; // Let lightbox handle it
-
-      switch (e.key) {
-        case "ArrowLeft":
-          e.preventDefault();
-          prevImage();
-          break;
-        case "ArrowRight":
-          e.preventDefault();
-          nextImage();
-          break;
-      }
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [showLightbox, activeImageIndex]);
-
   // Focus lightbox when opened
   useEffect(() => {
     if (showLightbox && lightboxRef.current) {
@@ -245,6 +199,64 @@ export default function PropertyDetailClient({
     whistleblower: null,
   } : null;
 
+  const nextImage = useCallback(() => {
+    if (!property) return;
+    setActiveImageIndex((prev) => (prev + 1) % property.images.length);
+  }, [property]);
+
+  const prevImage = useCallback(() => {
+    if (!property) return;
+    setActiveImageIndex(
+      (prev) => (prev - 1 + property.images.length) % property.images.length,
+    );
+  }, [property]);
+
+  // Handle keyboard navigation for lightbox
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (!showLightbox) return;
+
+      switch (e.key) {
+        case "ArrowLeft":
+          e.preventDefault();
+          prevImage();
+          break;
+        case "ArrowRight":
+          e.preventDefault();
+          nextImage();
+          break;
+        case "Escape":
+          e.preventDefault();
+          setShowLightbox(false);
+          break;
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [showLightbox, nextImage, prevImage]);
+
+  // Handle keyboard navigation for main gallery
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (showLightbox) return; // Let lightbox handle it
+
+      switch (e.key) {
+        case "ArrowLeft":
+          e.preventDefault();
+          prevImage();
+          break;
+        case "ArrowRight":
+          e.preventDefault();
+          nextImage();
+          break;
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [showLightbox, nextImage, prevImage]);
+
   if (isLoadingProperty) {
     return (
       <main className="min-h-screen bg-background flex items-center justify-center">
@@ -293,16 +305,6 @@ export default function PropertyDetailClient({
   const monthlyPayment = Math.round(
     (amountToFinance + inspectionFee) / paymentMonths,
   );
-
-  const nextImage = () => {
-    setActiveImageIndex((prev) => (prev + 1) % property.images.length);
-  };
-
-  const prevImage = () => {
-    setActiveImageIndex(
-      (prev) => (prev - 1 + property.images.length) % property.images.length,
-    );
-  };
 
   const handleReportSubmit = async () => {
     if (!reportCategory || !reportDetails.trim()) return;

@@ -11,6 +11,10 @@ export interface TestUsers {
 export interface SeedResult {
   users: TestUsers;
   listingId: string;
+  /** The whistleblower_listings listing_id (approved, linked to landlord). */
+  approvedListingId: string;
+  /** The landlord_properties id (approved, linked to the listing). */
+  landlordPropertyId: string;
   runId: string;
 }
 
@@ -53,11 +57,59 @@ export async function seedTestData(): Promise<SeedResult> {
       ],
     );
 
+    // Approved KYC for landlord (required by listing approval gate)
+    await client.query(
+      `INSERT INTO kyc_documents (user_id, document_type, front_image_key, status, attempt_count)
+       VALUES ($1, 'national_id', 'test-key', 'approved', 1)`,
+      [(users.landlord as any).id],
+    );
+
+    // Approved whistleblower listing linked to the landlord
+    const photos = JSON.stringify([
+      "https://example.com/photo1.jpg",
+      "https://example.com/photo2.jpg",
+      "https://example.com/photo3.jpg",
+    ]);
+    const { rows: wlRow } = await client.query(
+      `INSERT INTO whistleblower_listings
+         (whistleblower_id, address, city, area, bedrooms, bathrooms,
+          annual_rent_ngn, photos, status, reviewed_by, reviewed_at)
+       VALUES ($1, $2, 'Lagos', 'Victoria Island', 3, 2,
+               6000000, $3::jsonb, 'approved', $1, NOW())
+       RETURNING listing_id`,
+      [(users.landlord as any).id, "123 Test Street, Victoria Island, Lagos", photos],
+    );
+
+    // Landlord property record linked to the approved listing
+    const { rows: lpRow } = await client.query(
+      `INSERT INTO landlord_properties
+         (landlord_id, title, address, city, area, bedrooms, bathrooms,
+          annual_rent_ngn, negotiated_landlord_rate_ngn, outright_price_ngn,
+          installment_base_price_ngn, photos, amenities, status, listing_id)
+       VALUES ($1, $2, $3, 'Lagos', 'Victoria Island', 3, 2,
+               6000000, 5500000, 7000000, 8000000,
+               $4::jsonb, '[]'::jsonb, 'approved', $5)
+       RETURNING id`,
+      [
+        (users.landlord as any).id,
+        `E2E Apartment ${runId}`,
+        "123 Test Street, Victoria Island, Lagos",
+        photos,
+        wlRow.listing_id,
+      ],
+    );
+
     await client.query("COMMIT");
     await client.release();
     await pool.end();
 
-    return { users, listingId: listing[0].id, runId };
+    return {
+      users,
+      listingId: listing[0].id,
+      approvedListingId: wlRow.listing_id,
+      landlordPropertyId: lpRow.id,
+      runId,
+    };
   } catch (err) {
     await client.query("ROLLBACK");
     client.release();
@@ -71,6 +123,31 @@ export async function cleanupTestData(runId: string): Promise<void> {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
+    await client.query(
+      `DELETE FROM listing_applications WHERE listing_id IN
+         (SELECT listing_id FROM whistleblower_listings WHERE whistleblower_id IN
+           (SELECT id::text FROM users WHERE email LIKE $1))`,
+      [`%${runId}%`],
+    );
+    await client.query(
+      `DELETE FROM tenant_deals WHERE landlord_id IN
+         (SELECT id::text FROM users WHERE email LIKE $1)`,
+      [`%${runId}%`],
+    );
+    await client.query(
+      `DELETE FROM landlord_properties WHERE title LIKE $1`,
+      [`%${runId}%`],
+    );
+    await client.query(
+      `DELETE FROM whistleblower_listings WHERE whistleblower_id IN
+         (SELECT id::text FROM users WHERE email LIKE $1)`,
+      [`%${runId}%`],
+    );
+    await client.query(
+      `DELETE FROM kyc_documents WHERE user_id IN
+         (SELECT id FROM users WHERE email LIKE $1)`,
+      [`%${runId}%`],
+    );
     await client.query(
       `DELETE FROM properties WHERE title LIKE $1`,
       [`%${runId}%`],

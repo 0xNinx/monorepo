@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { ArrowLeft, Upload, CheckCircle, Loader2, X, AlertCircle  } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -66,9 +66,12 @@ export default function ReportApartmentPage() {
   };
 
   // Clean up object URLs when component unmounts
+  const photosRef = useRef(formData.photos);
+  photosRef.current = formData.photos;
+
   useEffect(() => {
     return () => {
-      formData.photos.forEach((photo) => {
+      photosRef.current.forEach((photo) => {
         URL.revokeObjectURL(photo.url);
       });
     };
@@ -288,6 +291,7 @@ export default function ReportApartmentPage() {
                             key={photo.id}
                             className="relative group border-3 border-foreground overflow-hidden"
                           >
+                            {/* eslint-disable-next-line @next/next/no-img-element -- blob URLs from URL.createObjectURL are incompatible with next/image */}
                             <img
                               src={photo.url}
                               alt="Preview"

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect, useRef } from "react";
+import Image from "next/image";
 import {
   XCircle,
   Eye,
@@ -71,13 +72,16 @@ function DocumentContent({
   return (
     <div className="relative bg-muted border-2 border-foreground rounded">
       {isImage && (
-        <img
+        <Image
           src={preview.storageKey}
           alt={`Preview of ${preview.fileName}`}
+          width={800}
+          height={600}
           className="max-w-full h-auto max-h-96 mx-auto"
           onLoad={() => onRenderEnd()}
           onError={() => onRenderError("Failed to load image")}
           onLoadStart={() => onRenderStart()}
+          unoptimized
         />
       )}
 

@@ -167,7 +167,7 @@ export function PhotoGalleryEditor({
     if (event.dataTransfer.files?.length) {
       handleFiles(event.dataTransfer.files);
     }
-  }, []);
+  }, [handleFiles]);
 
   const handleFiles = useCallback(
     async (files: FileList | File[]) => {
@@ -239,7 +239,7 @@ export function PhotoGalleryEditor({
         });
       }
     },
-    [availableSlots, photos, propertyId, updatePhotos],
+    [availableSlots, photos, propertyId, updatePhotos, onChange, primaryPhotoId],
   );
 
   const fileBrowse = useCallback(() => {

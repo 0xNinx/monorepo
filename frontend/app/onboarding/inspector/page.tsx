@@ -282,6 +282,7 @@ function InspectorOnboardingContent() {
                       <div className="flex items-center justify-between p-3 border rounded-md bg-muted/50">
                         <div className="flex items-center space-x-3">
                           {passportFile.file.type.startsWith('image/') ? (
+                            // eslint-disable-next-line @next/next/no-img-element -- blob URLs from URL.createObjectURL are incompatible with next/image
                             <img src={passportFile.previewUrl} alt="Preview" className="w-10 h-10 object-cover rounded-md" />
                           ) : (
                             <FileIcon className="w-10 h-10 text-muted-foreground" />
@@ -311,6 +312,7 @@ function InspectorOnboardingContent() {
                       <div className="flex items-center justify-between p-3 border rounded-md bg-muted/50">
                         <div className="flex items-center space-x-3">
                           {driverLicenseFile.file.type.startsWith('image/') ? (
+                            // eslint-disable-next-line @next/next/no-img-element -- blob URLs from URL.createObjectURL are incompatible with next/image
                             <img src={driverLicenseFile.previewUrl} alt="Preview" className="w-10 h-10 object-cover rounded-md" />
                           ) : (
                             <FileIcon className="w-10 h-10 text-muted-foreground" />
