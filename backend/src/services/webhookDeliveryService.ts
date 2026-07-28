@@ -25,7 +25,8 @@ export function computeHmacSignature(payload: string, secret: string): string {
 
 export async function enqueueDelivery(
   event: WebhookEventType,
-  payload: Record<string, unknown>
+  payload: Record<string, unknown>,
+  options?: { requestId?: string }
 ): Promise<void> {
   const activeSubs = webhookSubscriptionStore.listActiveByEvent(event)
   const scheduler = getScheduler()
@@ -35,7 +36,8 @@ export async function enqueueDelivery(
       subscriptionId: sub.id,
       event,
       payload,
-      attemptCount: 0
+      attemptCount: 0,
+      requestId: options?.requestId,
     }
 
     await scheduler.schedule({
@@ -52,8 +54,9 @@ export async function processWebhookDeliveryJob(jobPayload: {
   event: WebhookEventType
   payload: Record<string, unknown>
   attemptCount: number
+  requestId?: string
 }): Promise<void> {
-  const { subscriptionId, event, payload, attemptCount } = jobPayload
+  const { subscriptionId, event, payload, attemptCount, requestId } = jobPayload
   const sub = webhookSubscriptionStore.findById(subscriptionId)
   if (!sub || !sub.active) {
     return
@@ -98,6 +101,7 @@ export async function processWebhookDeliveryJob(jobPayload: {
     status: status === 'delivered' ? 'delivered' : (currentAttempt >= MAX_DELIVERY_ATTEMPTS ? 'permanently_failed' : 'failed'),
     responseCode,
     responseBody: truncatedBody,
+    requestId,
   })
 
   if (status === 'delivered') {
@@ -115,7 +119,8 @@ export async function processWebhookDeliveryJob(jobPayload: {
         subscriptionId,
         event,
         payload,
-        attemptCount: currentAttempt
+        attemptCount: currentAttempt,
+        requestId,
       },
       nextRunAt,
       maxRetries: 0

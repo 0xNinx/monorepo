@@ -77,6 +77,22 @@ function getEndpointConfig(method: string, path: string): RateLimitConfig & { ma
     return { ...RateLimitTiers.payment_initiate, matchedKey: 'payment_initiate' }
   }
 
+  if (method === 'POST' && (path.startsWith('/api/staking') || path.startsWith('/staking'))) {
+    return { ...RateLimitTiers.staking, matchedKey: 'staking' }
+  }
+
+  if (method === 'POST' && (path.startsWith('/api/deposits') || path.startsWith('/deposits'))) {
+    return { ...RateLimitTiers.deposit, matchedKey: 'deposit' }
+  }
+
+  if (method === 'POST' && (path.startsWith('/api/wallet/ngn/withdraw') || path.startsWith('/wallet/ngn/withdraw'))) {
+    return { ...RateLimitTiers.wallet_withdrawal, matchedKey: 'wallet_withdrawal' }
+  }
+
+  if (method === 'POST' && (path.startsWith('/api/wallet/ngn/topup') || path.startsWith('/wallet/ngn/topup'))) {
+    return { ...RateLimitTiers.wallet_topup, matchedKey: 'wallet_topup' }
+  }
+
   if (path.startsWith('/api/properties') || path.startsWith('/properties')) {
     return { ...RateLimitTiers.search, matchedKey: 'search' }
   }

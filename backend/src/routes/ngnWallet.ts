@@ -87,6 +87,7 @@ export function createNgnWalletRouter(ngnWalletService: NgnWalletService): Route
     '/withdraw/initiate',
     authenticateToken,
     requireNotFrozen,
+    durableIdempotency((req) => `withdrawal:${(req as AuthenticatedRequest).user!.id}`),
     validate(withdrawalRequestSchema, 'body'),
     async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
       try {
