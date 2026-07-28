@@ -1,8 +1,5 @@
 // Re-export all mock data from this file for easy imports
 
-// Homepage
-export { homePageStats, homePageBenefits } from "./homepage";
-
 // Properties
 export { allProperties, propertyFilters } from "./properties";
 

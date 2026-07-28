@@ -581,6 +581,18 @@ export function createApp() {
   app.use(requestIdMiddleware);
   app.use(traceResponseMiddleware);
 
+  // Attach requestId to Sentry scope for error correlation
+  if (env.NODE_ENV !== "test" && process.env.SENTRY_DSN_BACKEND) {
+    app.use((req: import('express').Request, _res: import('express').Response, next: import('express').NextFunction) => {
+      Sentry.withScope((scope) => {
+        scope.setTag("requestId", req.requestId || "unknown");
+        scope.setExtra("method", req.method);
+        scope.setExtra("path", req.originalUrl);
+      });
+      next();
+    });
+  }
+
   // Sentry request handler (must be before routes)
   if (env.NODE_ENV !== "test" && process.env.SENTRY_DSN_BACKEND) {
     app.use((Sentry as any).Handlers.requestHandler());

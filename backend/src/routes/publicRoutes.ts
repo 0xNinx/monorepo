@@ -44,7 +44,10 @@ publicRouter.get(
     }
 
     let landlordCount = 0
+    let tenantCount = 0
     let totalPaidNgn = 0
+    let totalFinancedNgn = 0
+    let citiesCount = 0
     let defaultRate = 0
 
     try {
@@ -55,12 +58,30 @@ publicRouter.get(
         )
         landlordCount = Number(landlordRows[0]?.count || 0)
 
+        const { rows: tenantRows } = await pool.query(
+          "SELECT COUNT(*) as count FROM users WHERE role = 'tenant' AND deleted_at IS NULL"
+        )
+        tenantCount = Number(tenantRows[0]?.count || 0)
+
         const { rows: paidRows } = await pool.query(
           `SELECT COALESCE(SUM(amount_ngn), 0) as total
            FROM settlement_ledger_entries
            WHERE beneficiary_type = 'landlord'`
         )
         totalPaidNgn = Number(paidRows[0]?.total || 0)
+
+        const { rows: financedRows } = await pool.query(
+          `SELECT COALESCE(SUM(financed_amount_ngn), 0) as total
+           FROM tenant_deals WHERE deleted_at IS NULL`
+        )
+        totalFinancedNgn = Number(financedRows[0]?.total || 0)
+
+        const { rows: citiesRows } = await pool.query(
+          `SELECT COUNT(DISTINCT city) as count
+           FROM landlord_properties
+           WHERE city IS NOT NULL AND city != ''`
+        )
+        citiesCount = Number(citiesRows[0]?.count || 0)
 
         const { rows: defRows } = await pool.query(
           `SELECT
@@ -91,8 +112,13 @@ publicRouter.get(
     const payload = {
       success: true,
       data: {
-        totalPaidToLandlords: formatNgnAmount(totalPaidNgn),
+        // Homepage stats
+        happyTenants: tenantCount > 0 ? `${tenantCount.toLocaleString()}+` : "0",
+        rentFinanced: formatNgnAmount(totalFinancedNgn),
         partnerLandlords: landlordCount > 0 ? `${landlordCount}+` : "0",
+        citiesCovered: citiesCount > 0 ? `${citiesCount}` : "0",
+        // Landlords page stats
+        totalPaidToLandlords: formatNgnAmount(totalPaidNgn),
         avgPaymentTime: "48hrs",
         landlordDefaultRate: `${defaultRate}%`,
       },

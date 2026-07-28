@@ -5,6 +5,7 @@ import { ErrorCode, classifyError, type ErrorResponse } from '../errors/errorCod
 import { chainUnavailable } from '../errors/factories.js'
 import { isChainUnavailableError } from '../errors/chainUnavailable.js'
 import { formatZodIssues } from '../errors/utils.js'
+import { logger } from '../utils/logger.js'
 
 const isProduction = process.env.NODE_ENV === 'production'
 
@@ -33,6 +34,7 @@ export function errorHandler(
       .setHeader('x-request-id', requestId)
       .json({
         ...body,
+        requestId,
         error: {
           ...body.error,
           classification,
@@ -59,18 +61,13 @@ export function errorHandler(
    * 2️⃣ Chain / Soroban RPC unavailable (circuit open or timeout)
    */
   if (isChainUnavailableError(err)) {
-    console.warn(
-      JSON.stringify({
-        level: 'warn',
-        requestId,
-        message: 'Chain unavailable',
-        errorName: err instanceof Error ? err.name : 'Unknown',
-        errorMessage: err instanceof Error ? err.message : String(err),
-        path: req.originalUrl,
-        method: req.method,
-        timestamp: new Date().toISOString(),
-      }),
-    )
+    logger.warn('Chain unavailable', {
+      requestId,
+      errorName: err instanceof Error ? err.name : 'Unknown',
+      errorMessage: err instanceof Error ? err.message : String(err),
+      path: req.originalUrl,
+      method: req.method,
+    })
 
     const appErr = chainUnavailable()
     send(appErr.status, {
@@ -115,19 +112,14 @@ export function errorHandler(
   const safeMessage = 'An unexpected error occurred'
 
   // Structured logging (never log secrets)
-  console.error(
-    JSON.stringify({
-      level: 'error',
-      requestId,
-      message: 'Unhandled error',
-      errorName: err instanceof Error ? err.name : 'Unknown',
-      errorMessage: err instanceof Error ? err.message : String(err),
-      stack: !isProduction && err instanceof Error ? err.stack : undefined,
-      path: req.originalUrl,
-      method: req.method,
-      timestamp: new Date().toISOString(),
-    }),
-  )
+  logger.error('Unhandled error', {
+    requestId,
+    errorName: err instanceof Error ? err.name : 'Unknown',
+    errorMessage: err instanceof Error ? err.message : String(err),
+    stack: !isProduction && err instanceof Error ? err.stack : undefined,
+    path: req.originalUrl,
+    method: req.method,
+  })
 
   send(500, {
     error: {

@@ -305,7 +305,7 @@ router.patch('/:dealId/status', async (req: Request, res: Response, next) => {
           tenantId: deal.tenantId,
           landlordId: deal.landlordId,
           totalFinancedAmount: deal.financedAmountNgn
-        }).catch(err => logger.error('Failed to enqueue deal webhook:', err))
+        }, { requestId: req.requestId }).catch(err => logger.error('Failed to enqueue deal webhook:', err))
       }
     }
 
