@@ -68,7 +68,7 @@ export function createAdminAnalyticsRouter(): Router {
           
           // 1. Total users by role
           const { rows: userRows } = await pool!.query(
-            "SELECT role, COUNT(*) as count FROM users GROUP BY role"
+            "SELECT role, COUNT(*) as count FROM users WHERE deleted_at IS NULL GROUP BY role"
           );
           const usersByRole = {
             tenant: 0,
@@ -85,7 +85,7 @@ export function createAdminAnalyticsRouter(): Router {
 
           // 2. Active deals count (active + at_risk)
           const { rows: dealRows } = await pool!.query(
-            "SELECT COUNT(*) as count FROM tenant_deals WHERE status IN ('active', 'at_risk')"
+            "SELECT COUNT(*) as count FROM tenant_deals WHERE status IN ('active', 'at_risk') AND deleted_at IS NULL"
           );
           const activeDeals = Number(dealRows[0]?.count || 0);
 
@@ -103,7 +103,7 @@ export function createAdminAnalyticsRouter(): Router {
             `SELECT 
                COUNT(*) FILTER (WHERE status = 'defaulted') as defaulted,
                COUNT(*) as total
-             FROM tenant_deals`
+             FROM tenant_deals WHERE deleted_at IS NULL`
           );
           const defaulted = Number(defRows[0]?.defaulted || 0);
           const totalDeals = Number(defRows[0]?.total || 0);
@@ -177,7 +177,7 @@ export function createAdminAnalyticsRouter(): Router {
         if (dbActive) {
           const pool = await getPool();
           const { rows } = await pool!.query(
-            "SELECT status, COUNT(*) as count FROM tenant_deals GROUP BY status"
+            "SELECT status, COUNT(*) as count FROM tenant_deals WHERE deleted_at IS NULL GROUP BY status"
           );
 
           const funnel: Record<string, number> = {
@@ -379,7 +379,7 @@ export function createAdminAnalyticsRouter(): Router {
 
           // 3. Whistleblower issue report rate
           const { rows: listRows } = await pool!.query(
-            "SELECT COUNT(*) as count FROM whistleblower_listings"
+            "SELECT COUNT(*) as count FROM whistleblower_listings WHERE deleted_at IS NULL"
           );
           const { rows: issueRows } = await pool!.query(
             "SELECT COUNT(*) as count FROM property_issue_reports"

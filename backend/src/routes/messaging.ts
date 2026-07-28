@@ -10,6 +10,7 @@ import { AppError, notFound, unauthorized } from "../errors/AppError.js"
 import { ErrorCode } from "../errors/errorCodes.js"
 import { logger } from "../utils/logger.js"
 import { conversationStore } from "../models/conversationStore.js"
+import { queueMessageNotificationsSafely } from "../services/messageNotificationService.js"
 import {
   createConversationSchema,
   sendMessageSchema,
@@ -191,6 +192,20 @@ export function createMessagingRouter(): Router {
         senderId: userId,
         body: data.body,
         attachment: data.attachment,
+      })
+      void queueMessageNotificationsSafely({
+        conversationId: req.params.id,
+        senderId: userId,
+        body: data.body,
+        createdAt: message.createdAt,
+      }).catch((notificationError) => {
+        logger.error('Failed to queue message notifications', {
+          conversationId: req.params.id,
+          error:
+            notificationError instanceof Error
+              ? notificationError.message
+              : String(notificationError),
+        })
       })
       res.status(201).json({ success: true, data: message })
     } catch (error) {

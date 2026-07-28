@@ -16,6 +16,8 @@ interface Props {
   children: ReactNode
   fallback?: ReactNode
   level?: 'page' | 'section'
+  section?: string
+  userRole?: string
   onRetry?: () => void
 }
 
@@ -23,16 +25,17 @@ interface State {
   hasError: boolean
   error: Error | null
   eventId: string | null
+  retryCount: number
 }
 
 export class ErrorBoundary extends Component<Props, State> {
   constructor(props: Props) {
     super(props)
-    this.state = { hasError: false, error: null, eventId: null }
+    this.state = { hasError: false, error: null, eventId: null, retryCount: 0 }
   }
 
   static getDerivedStateFromError(error: Error): State {
-    return { hasError: true, error, eventId: null }
+    return { hasError: true, error, eventId: null, retryCount: 0 }
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
@@ -44,6 +47,8 @@ export class ErrorBoundary extends Component<Props, State> {
       error,
       componentStack: errorInfo.componentStack || undefined,
       level: this.props.level ?? 'page',
+      section: this.props.section,
+      userRole: this.props.userRole,
     }).then(eventId => {
       if (eventId) {
         this.setState({ eventId })
@@ -53,12 +58,21 @@ export class ErrorBoundary extends Component<Props, State> {
 
   handleReset = () => {
     this.props.onRetry?.()
-    this.setState({ hasError: false, error: null, eventId: null })
+    this.setState((current) => ({
+      hasError: false,
+      error: null,
+      eventId: null,
+      retryCount: current.retryCount + 1,
+    }))
   }
 
   render() {
     if (!this.state.hasError) {
-      return this.props.children
+      return (
+        <React.Fragment key={this.state.retryCount}>
+          {this.props.children}
+        </React.Fragment>
+      )
     }
 
     if (this.props.fallback) {

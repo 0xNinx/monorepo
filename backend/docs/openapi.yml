@@ -179,6 +179,41 @@ paths:
         default:
           $ref: "#/components/responses/Error"
 
+  /api/v1/user/preferences/notifications/messages-email:
+    patch:
+      summary: Update message email preference
+      description: Opt in or out of delayed message email notifications.
+      operationId: updateMessageEmailPreference
+      tags:
+        - User Preferences
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - enabled
+              properties:
+                enabled:
+                  type: boolean
+      responses:
+        "200":
+          description: Preference updated
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - messageEmailsEnabled
+                properties:
+                  messageEmailsEnabled:
+                    type: boolean
+        default:
+          $ref: "#/components/responses/Error"
+
   /api/auth/wallet/challenge:
     post:
       summary: Create wallet login challenge

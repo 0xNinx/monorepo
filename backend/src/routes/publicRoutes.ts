@@ -51,7 +51,7 @@ publicRouter.get(
       const pool = await getPool()
       if (pool) {
         const { rows: landlordRows } = await pool.query(
-          "SELECT COUNT(*) as count FROM users WHERE role = 'landlord'"
+          "SELECT COUNT(*) as count FROM users WHERE role = 'landlord' AND deleted_at IS NULL"
         )
         landlordCount = Number(landlordRows[0]?.count || 0)
 
@@ -66,7 +66,7 @@ publicRouter.get(
           `SELECT
              COUNT(*) FILTER (WHERE status = 'defaulted') as defaulted,
              COUNT(*) as total
-           FROM tenant_deals`
+           FROM tenant_deals WHERE deleted_at IS NULL`
         )
         const defaulted = Number(defRows[0]?.defaulted || 0)
         const totalDeals = Number(defRows[0]?.total || 0)

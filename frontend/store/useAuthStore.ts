@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import { logger } from "./logger";
 import { getToken, setToken as saveToken, clearToken } from "@/lib/auth";
+import { clearAuthenticatedOfflineState } from "@/lib/offline-session";
 
 interface User {
   id: string;
@@ -36,6 +37,7 @@ const useAuthStore = create<AuthState>()(
         setUser: (user) => set({ user }),
         logout: () => {
           clearToken();
+          clearAuthenticatedOfflineState();
           set({ token: null, user: null, isAuthenticated: false });
         },
       }),

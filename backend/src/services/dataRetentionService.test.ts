@@ -133,8 +133,8 @@ describe('DataRetentionService', () => {
       })
       expect(mockQuery).toHaveBeenCalledWith('BEGIN')
       expect(mockQuery).toHaveBeenCalledWith(
-        expect.stringContaining('DELETE FROM users WHERE deleted_at <'),
-        [expect.any(Date)]
+        expect.stringContaining('FROM users t'),
+        [expect.any(Date), 'users']
       )
       expect(mockQuery).toHaveBeenCalledWith('COMMIT')
     })
@@ -233,9 +233,20 @@ describe('DataRetentionService', () => {
       expect(result.users).toBe(5)
       expect(result.sessions).toBe(3)
       expect(result.wallets).toBe(2)
-      expect(mockQuery).toHaveBeenCalledWith(
-        'SELECT COUNT(*) as count FROM users WHERE deleted_at < $1',
-        [expect.any(Date)]
+      expect(mockQuery).toHaveBeenNthCalledWith(
+        1,
+        expect.stringContaining('FROM users t'),
+        [expect.any(Date), 'users']
+      )
+      expect(mockQuery).toHaveBeenNthCalledWith(
+        2,
+        expect.stringContaining('FROM sessions t'),
+        [expect.any(Date), 'sessions']
+      )
+      expect(mockQuery).toHaveBeenNthCalledWith(
+        3,
+        expect.stringContaining('FROM wallets t'),
+        [expect.any(Date), 'wallets']
       )
     })
 

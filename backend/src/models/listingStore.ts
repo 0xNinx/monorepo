@@ -314,7 +314,7 @@ class PostgresListingStore implements ListingStorePort {
   async getById(listingId: string): Promise<Listing | null> {
     const pool = await this.pool()
     const { rows } = await pool.query(
-      'SELECT * FROM whistleblower_listings WHERE listing_id = $1',
+      'SELECT * FROM whistleblower_listings WHERE listing_id = $1 AND deleted_at IS NULL',
       [listingId],
     )
 
@@ -328,7 +328,7 @@ class PostgresListingStore implements ListingStorePort {
 
   async search(filters: ListingFilters = {}): Promise<PaginatedListings> {
     const pool = await this.pool()
-    const where: string[] = []
+    const where: string[] = ['deleted_at IS NULL']
     const values: unknown[] = []
     let rankExpression = '0::real'
     let headlineExpression = `COALESCE(description, address)`
@@ -416,13 +416,13 @@ class PostgresListingStore implements ListingStorePort {
       `SELECT suggestion
        FROM (
          SELECT address AS suggestion, created_at FROM whistleblower_listings
-         WHERE status = $1 AND address ILIKE $2
+         WHERE status = $1 AND deleted_at IS NULL AND address ILIKE $2
          UNION ALL
          SELECT area AS suggestion, created_at FROM whistleblower_listings
-         WHERE status = $1 AND area ILIKE $2
+         WHERE status = $1 AND deleted_at IS NULL AND area ILIKE $2
          UNION ALL
          SELECT city AS suggestion, created_at FROM whistleblower_listings
-         WHERE status = $1 AND city ILIKE $2
+         WHERE status = $1 AND deleted_at IS NULL AND city ILIKE $2
        ) suggestions
        WHERE suggestion IS NOT NULL
        GROUP BY suggestion

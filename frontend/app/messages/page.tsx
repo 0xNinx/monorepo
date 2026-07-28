@@ -49,6 +49,8 @@ import type {
   MessageAttachment,
   AttachmentUploadResult,
 } from "@/lib/types/messaging";
+import { handleError } from "@/lib/toast";
+import { isNetworkError } from "@/lib/errors";
 
 type LocalMessage = {
   id: string;
@@ -132,6 +134,7 @@ export default function MessagesPage() {
   const [messagesError, setMessagesError] = useState<string | null>(null);
   const [isSending, setIsSending] = useState(false);
   const [uploadState, setUploadState] = useState<UploadState | null>(null);
+  const [composerError, setComposerError] = useState<string | null>(null);
 
   const [hasMoreConversations, setHasMoreConversations] = useState(false);
   const [conversationCursor, setConversationCursor] = useState<string | null>(null);
@@ -435,6 +438,7 @@ export default function MessagesPage() {
     setMessages(prev => [...prev, optimisticMsg]);
     setNewMessage("");
     setUploadState(null);
+    setComposerError(null);
     setIsSending(true);
     setIsAtBottom(true);
 
@@ -451,10 +455,15 @@ export default function MessagesPage() {
         lastMessage: c.id === selectedConversationId ? { text: text || (attachment ? `Sent a ${attachment.type}` : ""), senderId: currentUserId, createdAt: new Date().toISOString() } : c.lastMessage,
         updatedAt: new Date().toISOString(),
       })));
-    } catch {
+    } catch (error) {
       setMessages(prev =>
         prev.map(m => m.id === optimisticMsg.id ? { ...m, status: "failed" as const } : m),
       );
+      const errorMessage = isNetworkError(error)
+        ? "You appear to be offline. Your message is still unsent."
+        : "Your message could not be sent. Please try again."
+      setComposerError(errorMessage);
+      handleError(error, errorMessage);
     } finally {
       setIsSending(false);
     }
@@ -464,6 +473,7 @@ export default function MessagesPage() {
     if (isSending || !selectedConversationId) return;
 
     setMessages(prev => prev.map(m => m.id === failedMsg.id ? { ...m, status: "sending" } : m));
+    setComposerError(null);
     setIsSending(true);
 
     const key = generateIdempotencyKey();
@@ -478,10 +488,15 @@ export default function MessagesPage() {
       setMessages(prev =>
         prev.map(m => m.id === failedMsg.id ? { ...apiMessageToLocal(sent), status: "sent" as const } : m),
       );
-    } catch {
+    } catch (error) {
       setMessages(prev =>
         prev.map(m => m.id === failedMsg.id ? { ...m, status: "failed" as const } : m),
       );
+      const errorMessage = isNetworkError(error)
+        ? "You appear to be offline. Retry will resume when your connection returns."
+        : "Message retry failed. Please try again."
+      setComposerError(errorMessage);
+      handleError(error, errorMessage);
     } finally {
       setIsSending(false);
     }
@@ -830,6 +845,12 @@ export default function MessagesPage() {
 
           {/* Message Input */}
           <div className="border-t-3 border-foreground bg-card p-3 md:p-4">
+            {composerError && (
+              <div className="mx-auto mb-3 flex max-w-3xl items-start gap-2 border-2 border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
+                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                <span>{composerError}</span>
+              </div>
+            )}
             <div className="mx-auto flex max-w-3xl gap-2 md:gap-4">
               <input
                 ref={fileInputRef}

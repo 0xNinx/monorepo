@@ -25,6 +25,7 @@ import { TenantRewardsSummaryCard } from "@/components/tenant-rewards-summary-ca
 import { useFeatureFlag } from "@/lib/featureFlags";
 import { getTenantPaymentStatusPresentation } from "@/lib/tenantPaymentStatus";
 import { apiFetch } from "@/lib/api";
+import { SectionBoundary } from "@/components/section-boundary";
 import {
   getTenantCurrentLease,
   getPaymentSchedule,
@@ -355,6 +356,7 @@ export default function TenantDashboard() {
           </div>
 
           {activeTab === "overview" && (
+            <SectionBoundary section="tenant-dashboard-overview" userRole="tenant">
             <div className="grid gap-4 md:gap-6 lg:grid-cols-2">
               {leaseLoading ? (
                 <Card className="border-3 border-foreground p-6 shadow-[4px_4px_0px_0px_rgba(26,26,26,1)]">
@@ -487,9 +489,11 @@ export default function TenantDashboard() {
 
               {isStakingEnabled && <TenantRewardsSummaryCard />}
             </div>
+            </SectionBoundary>
           )}
 
           {activeTab === "payments" && (
+            <SectionBoundary section="tenant-dashboard-payments" userRole="tenant">
             <Card className="border-3 border-foreground p-6 shadow-[4px_4px_0px_0px_rgba(26,26,26,1)]">
               <h3 className="mb-6 text-lg font-bold">Payment History</h3>
 
@@ -564,9 +568,11 @@ export default function TenantDashboard() {
                 </div>
               )}
             </Card>
+            </SectionBoundary>
           )}
 
           {activeTab === "saved" && (
+            <SectionBoundary section="tenant-dashboard-saved" userRole="tenant">
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               {savedLoading ? (
                 Array.from({ length: 3 }).map((_, i) => (
@@ -622,6 +628,7 @@ export default function TenantDashboard() {
                 </Card>
               )}
             </div>
+            </SectionBoundary>
           )}
         </div>
       </main>

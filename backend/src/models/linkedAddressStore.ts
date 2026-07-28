@@ -44,7 +44,7 @@ export class PostgresLinkedAddressStore implements LinkedAddressStore {
   async getLinkedAddress(userId: string): Promise<string | null> {
     const pool = await this.pool()
     const { rows } = await pool.query(
-      `SELECT address FROM linked_addresses WHERE user_id = $1`,
+      `SELECT address FROM linked_addresses WHERE user_id = $1 AND deleted_at IS NULL`,
       [userId],
     )
     const row = rows[0]
