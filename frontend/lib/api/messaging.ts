@@ -5,16 +5,19 @@ import type {
   Message,
   UploadUrlResponse,
   AttachmentUploadResult,
+  PaginatedConversations,
+  PaginatedMessages,
 } from "@/lib/types/messaging"
 
-export async function fetchConversations(cursor?: string, limit = 50): Promise<ConversationWithLastMessage[]> {
+export async function fetchConversations(cursor?: string, limit = 50, search?: string): Promise<PaginatedConversations> {
   const params = new URLSearchParams()
   if (cursor) params.set("cursor", cursor)
   params.set("limit", String(limit))
-  const res = await apiFetch<{ success: boolean; data: ConversationWithLastMessage[] }>(
+  if (search) params.set("search", search)
+  const res = await apiFetch<{ success: boolean; data: ConversationWithLastMessage[]; nextCursor: string | null }>(
     `/messaging/conversations?${params.toString()}`,
   )
-  return res.data
+  return { items: res.data, nextCursor: res.nextCursor }
 }
 
 export async function createConversation(participantIds: string[], subjectType?: string, subjectId?: string): Promise<Conversation> {
@@ -25,14 +28,14 @@ export async function createConversation(participantIds: string[], subjectType?:
   return res.data
 }
 
-export async function fetchMessages(conversationId: string, cursor?: string, limit = 50): Promise<Message[]> {
+export async function fetchMessages(conversationId: string, cursor?: string, limit = 50): Promise<PaginatedMessages> {
   const params = new URLSearchParams()
   if (cursor) params.set("cursor", cursor)
   params.set("limit", String(limit))
-  const res = await apiFetch<{ success: boolean; data: Message[] }>(
+  const res = await apiFetch<{ success: boolean; data: Message[]; nextCursor: string | null }>(
     `/messaging/conversations/${conversationId}/messages?${params.toString()}`,
   )
-  return res.data
+  return { items: res.data, nextCursor: res.nextCursor }
 }
 
 export async function sendMessage(

@@ -117,8 +117,8 @@ export function createMessagingRouter(): Router {
     try {
       const userId = requireUser(req)
       const filters = conversationFiltersSchema.parse(req.query)
-      const conversations = await conversationStore.listConversations(userId, filters)
-      res.json({ success: true, data: conversations })
+      const result = await conversationStore.listConversations(userId, filters)
+      res.json({ success: true, data: result.items, nextCursor: result.nextCursor })
     } catch (error) {
       if (error instanceof Error && error.name === 'ZodError') {
         return next(new AppError(ErrorCode.VALIDATION_ERROR, 400, error.message))
@@ -167,8 +167,8 @@ export function createMessagingRouter(): Router {
         throw notFound('Conversation')
       }
       const query = messageQuerySchema.parse(req.query)
-      const messages = await conversationStore.getMessages(req.params.id, userId, query.cursor, query.limit)
-      res.json({ success: true, data: messages })
+      const result = await conversationStore.getMessages(req.params.id, userId, query.cursor, query.limit)
+      res.json({ success: true, data: result.items, nextCursor: result.nextCursor })
     } catch (error) {
       if (error instanceof Error && error.name === 'ZodError') {
         return next(new AppError(ErrorCode.VALIDATION_ERROR, 400, error.message))

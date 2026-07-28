@@ -66,4 +66,5 @@ export interface SendMessageInput {
 export interface ConversationFilter {
   cursor?: string;
   limit?: number;
+  search?: string;
 }
