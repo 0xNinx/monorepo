@@ -1,3 +1,4 @@
+import PropertyPageContent from "@/components/properties/PropertyPageContent"
 "use client";
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
@@ -100,12 +101,13 @@ const featureIcons: { [key: string]: React.ElementType } = {
 };
 
 type PropertyDetailClientProps = {
-  propertyId: string;
-};
+  propertyId: string
+}
 
 export default function PropertyDetailClient({
   propertyId,
 }: PropertyDetailClientProps) {
+  return <PropertyPageContent propertyId={propertyId} />
   const router = useRouter();
   const { isAuthenticated } = useAuthStore();
   const [isFavorite, setIsFavorite] = useState(false);
