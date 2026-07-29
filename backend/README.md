@@ -4,14 +4,16 @@ Node.js backend for Shelterflex.
 
 ## Setup
 
-> **Package manager:** This project uses **npm**. Use `npm install` (not `pnpm` or `yarn`) to match
-> the `package-lock.json` lockfile that is committed to the repository.
+> **Package manager:** This project uses **npm**. Use `npm ci` (not `pnpm`) to match the lockfile and CI workflow.
 
 ```bash
-npm install
+npm ci
 cp .env.example .env
 npm run dev
 ```
+
+- The backend CI job runs `npm ci` from this directory.
+- For local API development, make sure PostgreSQL is available and that the environment file contains at least `DATABASE_URL` and `ENCRYPTION_KEY`.
 
 ## Testing
 
@@ -46,9 +48,23 @@ Tests are located in `src/**/*.test.ts` files and use Vitest + Supertest.
 
 ## Database migrations
 
-SQL migrations live in `migrations/` and are applied in filename order.
+SQL migrations live in `migrations/`.
 
-The repository includes a migration runner script in `src/repositories/test.ts` that:
+At runtime (`src/migrations/runMigrations.ts`), migrations are:
+
+- tracked by **exact filename** in `schema_migrations.filename`
+- wrapped in a transaction per file
+- skipped when that exact filename already exists in `schema_migrations`
+
+Because tracking is filename-based, renaming an already-applied migration is unsafe (it can make an applied migration look unapplied and cause re-execution).
+
+Ordering is resolved by `src/migrations/migrationOrdering.ts`:
+
+- legacy files are pinned in `migrations/migration-order.manifest.json` with unique integer positions
+- new files not listed in the manifest must use `YYYYMMDDHHMMSS_description.sql`
+- timestamp-prefixed files are appended in lexicographic order (chronological) and duplicate timestamps are rejected
+
+The repository includes a database setup script in `src/repositories/test.ts` that:
 
 - creates a `schema_migrations` table if missing
 - applies any `.sql` files not yet recorded
@@ -497,4 +513,3 @@ LOCAL_STORAGE_DIR=/tmp/shelterflex-dev
 ```
 
 This is useful for local development when you don't want to run MinIO.
-

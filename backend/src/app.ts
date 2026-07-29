@@ -163,6 +163,7 @@ import { createTenantRatingCardRouter } from "./routes/tenantRatingCard.js";
 import { createRentGuaranteeProviderFromEnv } from "./services/insurance/rentGuaranteeProviderFactory.js";
 import { createAdminCreditScoreRouter, createCreditScoreRouter } from "./routes/creditScore.js";
 import { createSorobanContractsRouter } from "./routes/sorobanContracts.js";
+import { createContractEventsRouter } from "./routes/contractEvents.js";
 
 import { initFraudStore, PostgresFraudStore } from "./fraud/index.js";
 import { createAdminFraudRouter } from "./routes/adminFraud.js";
@@ -171,6 +172,12 @@ import { initializeCacheInvalidationWebhooks } from "./services/cacheInvalidatio
 import { createKycWebhookRouter } from "./routes/kyc.js";
 import { createOnboardingRouter } from "./routes/onboarding.js";
 import { createEmployersRouter } from "./routes/employers.js";
+import { createMessagingRouter } from "./routes/messaging.js";
+import {
+  flushQueuedMessageNotificationDigest,
+  sendQueuedMessageNotificationEmail,
+} from "./services/messageNotificationService.js";
+import { createAttachmentsRouter } from "./routes/attachments.js";
 import { MonthlyDeductionReminderJob } from "./jobs/monthlyDeductionReminderJob.js";
 import { dataRetentionPurgeJobHandler, DATA_RETENTION_PURGE_JOB_NAME } from "./jobs/dataRetentionPurgeJob.js";
 
@@ -414,6 +421,16 @@ export function createApp() {
   jobScheduler.registerHandler('notification.send', async (job) => {
     await notificationService.send(job.payload as any)
   })
+  jobScheduler.registerHandler('messaging.notification.digest', async (job) => {
+    await flushQueuedMessageNotificationDigest(
+      (job.payload as { key: string }).key,
+    )
+  })
+  jobScheduler.registerHandler('messaging.notification.email', async (job) => {
+    await sendQueuedMessageNotificationEmail(
+      (job.payload as { key: string }).key,
+    )
+  })
 
   // Register webhook delivery job handler
   jobScheduler.registerHandler('webhook.delivery', async (job) => {
@@ -565,6 +582,18 @@ export function createApp() {
   app.use(requestIdMiddleware);
   app.use(traceResponseMiddleware);
 
+  // Attach requestId to Sentry scope for error correlation
+  if (env.NODE_ENV !== "test" && process.env.SENTRY_DSN_BACKEND) {
+    app.use((req: import('express').Request, _res: import('express').Response, next: import('express').NextFunction) => {
+      Sentry.withScope((scope) => {
+        scope.setTag("requestId", req.requestId || "unknown");
+        scope.setExtra("method", req.method);
+        scope.setExtra("path", req.originalUrl);
+      });
+      next();
+    });
+  }
+
   // Sentry request handler (must be before routes)
   if (env.NODE_ENV !== "test" && process.env.SENTRY_DSN_BACKEND) {
     app.use((Sentry as any).Handlers.requestHandler());
@@ -687,6 +716,7 @@ export function createApp() {
     app.use('/api/admin/secrets', createSecretRotationRouter())
     app.use('/api/admin/jobs', createAdminJobsRouter())
     app.use('/api/admin/webhook-replay', createWebhookReplayRouter())
+    app.use('/api', createContractEventsRouter())
     app.use('/api/deals', createDealsRouter())
     app.use('/api/whistleblower', createWhistleblowerRouter(earningsService))
     app.use('/api/webhooks', createWebhooksRouter(ngnWalletService))
@@ -740,6 +770,7 @@ export function createApp() {
     app.use("/api/admin", createAdminTenantCreditScoreRouter());
     app.use("/api/admin/credit-score", createAdminCreditScoreRouter());
     app.use("/api/admin", createSettlementAdminRouter());
+    app.use("/api", createContractEventsRouter());
     app.use("/api/config/feature-flags", createFeatureFlagsRouter());
     app.use(
       "/api/staking",
@@ -903,6 +934,8 @@ export function createApp() {
   app.use('/api/v1', createTenantRatingCardRouter(sorobanAdapter))
 
   // Interactive API documentation
+  app.use("/api/v1/messaging", createMessagingRouter());
+  app.use("/api/v1/messaging/attachments", createAttachmentsRouter());
   app.use("/docs", createDocsRouter());
 
   // Backward compatibility redirect from /api/* to /api/v1/*

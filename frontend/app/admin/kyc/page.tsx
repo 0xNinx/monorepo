@@ -99,7 +99,7 @@ export default function KycReviewQueuePage() {
     } finally {
       setLoading(false)
     }
-  }, [page, pageSize, status])
+  }, [page, pageSize, status, search])
 
   useEffect(() => {
     void fetchData()

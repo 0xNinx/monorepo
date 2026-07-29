@@ -7,6 +7,7 @@ info:
     name: ShelterFlex Team
   license:
     name: MIT
+    url: https://opensource.org/licenses/MIT
 
 servers:
   - url: http://localhost:4000
@@ -22,6 +23,7 @@ paths:
       operationId: getHealth
       tags:
         - Health
+      security: []
       responses:
         "200":
           description: Service is healthy
@@ -57,6 +59,7 @@ paths:
       operationId: requestOtp
       tags:
         - Auth
+      security: []
       requestBody:
         required: true
         content:
@@ -94,6 +97,7 @@ paths:
       operationId: verifyOtp
       tags:
         - Auth
+      security: []
       requestBody:
         required: true
         content:
@@ -127,6 +131,8 @@ paths:
                     description: "Session token to be used as Authorization: Bearer <token>"
                   user:
                     $ref: "#/components/schemas/User"
+        "400":
+          $ref: "#/components/responses/ValidationError"
         default:
           $ref: "#/components/responses/Error"
 
@@ -152,6 +158,8 @@ paths:
                   message:
                     type: string
                     example: Logged out
+        "401":
+          $ref: "#/components/responses/Unauthorized"
         default:
           $ref: "#/components/responses/Error"
 
@@ -176,6 +184,45 @@ paths:
                 properties:
                   user:
                     $ref: "#/components/schemas/User"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        default:
+          $ref: "#/components/responses/Error"
+
+  /api/v1/user/preferences/notifications/messages-email:
+    patch:
+      summary: Update message email preference
+      description: Opt in or out of delayed message email notifications.
+      operationId: updateMessageEmailPreference
+      tags:
+        - User Preferences
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - enabled
+              properties:
+                enabled:
+                  type: boolean
+      responses:
+        "200":
+          description: Preference updated
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - messageEmailsEnabled
+                properties:
+                  messageEmailsEnabled:
+                    type: boolean
+        "401":
+          $ref: "#/components/responses/Unauthorized"
         default:
           $ref: "#/components/responses/Error"
 
@@ -186,6 +233,7 @@ paths:
       operationId: walletChallenge
       tags:
         - Auth
+      security: []
       requestBody:
         required: true
         content:
@@ -199,6 +247,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/WalletChallengeResponse'
+        "400":
+          $ref: "#/components/responses/ValidationError"
         default:
           $ref: "#/components/responses/Error"
 
@@ -209,6 +259,7 @@ paths:
       operationId: walletVerify
       tags:
         - Auth
+      security: []
       requestBody:
         required: true
         content:
@@ -222,6 +273,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AuthTokenResponse'
+        "400":
+          $ref: "#/components/responses/ValidationError"
         default:
           $ref: "#/components/responses/Error"
 
@@ -241,13 +294,19 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/RiskStateResponse'
+        "401":
+          $ref: "#/components/responses/Unauthorized"
         default:
           $ref: "#/components/responses/Error"
 
   /api/admin/receipts:
     get:
       summary: Query indexed receipts
-      description: Query receipts indexed off-chain (no Soroban call).
+      description: >-
+        Query receipts indexed off-chain (no Soroban call). Note: despite the
+        /admin path prefix, this endpoint only requires an authenticated
+        session (authenticateToken) — the route handler does not check for an
+        admin role.
       operationId: queryReceipts
       tags:
         - Admin
@@ -286,16 +345,21 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PagedReceipts'
+        "401":
+          $ref: "#/components/responses/Unauthorized"
         default:
           $ref: "#/components/responses/Error"
 
   /api/deals/{dealId}/receipts:
     get:
       summary: List receipts for a deal
-      description: Returns all receipts for a deal.
+      description: >-
+        Returns all receipts for a deal. Note: the route has no auth
+        middleware today (see PR description — code/spec mismatch finding).
       operationId: listDealReceipts
       tags:
         - Deals
+      security: []
       parameters:
         - name: dealId
           in: path
@@ -309,6 +373,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/DealReceiptsResponse'
+        "404":
+          description: Deal not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         default:
           $ref: "#/components/responses/Error"
 
@@ -319,6 +389,7 @@ paths:
       operationId: createSupportMessage
       tags:
         - Support
+      security: []
       requestBody:
         required: true
         content:
@@ -373,6 +444,7 @@ paths:
       operationId: listWhistleblowerRatings
       tags:
         - Whistleblower
+      security: []
       parameters:
         - name: id
           in: path
@@ -413,6 +485,7 @@ paths:
       operationId: getWhistleblowerRatingAggregate
       tags:
         - Whistleblower
+      security: []
       parameters:
         - name: id
           in: path
@@ -444,6 +517,7 @@ paths:
       operationId: createPropertyIssueReport
       tags:
         - Risk
+      security: []
       requestBody:
         required: true
         content:
@@ -469,6 +543,7 @@ paths:
       operationId: getSorobanConfig
       tags:
         - Soroban
+      security: []
       responses:
         "200":
           description: Soroban configuration retrieved successfully
@@ -504,6 +579,7 @@ paths:
       operationId: getWhistleblowerEarnings
       tags:
         - Whistleblower
+      security: []
       parameters:
         - name: id
           in: path
@@ -630,6 +706,7 @@ paths:
       operationId: createListing
       tags:
         - Whistleblower
+      security: []
       requestBody:
         required: true
         content:
@@ -702,6 +779,7 @@ paths:
       operationId: listListings
       tags:
         - Whistleblower
+      security: []
       parameters:
         - name: status
           in: query
@@ -821,6 +899,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/WithdrawalHistoryResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         default:
           $ref: '#/components/responses/Error'
 
@@ -831,8 +911,10 @@ paths:
       operationId: approveNgnWithdrawal
       tags:
         - Admin
+      # requirePermission('payouts', 'trigger') in code — admin-tier RBAC permission,
+      # not just an authenticated session. See bearerAdminAuth description.
       security:
-        - bearerAuth: []
+        - bearerAdminAuth: []
       parameters:
         - name: id
           in: path
@@ -846,6 +928,14 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/WithdrawalResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Caller is authenticated but lacks the payouts:trigger permission
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '409':
           $ref: '#/components/responses/Error'
         default:
@@ -858,8 +948,10 @@ paths:
       operationId: rejectNgnWithdrawal
       tags:
         - Admin
+      # requirePermission('payouts', 'trigger') in code — admin-tier RBAC permission,
+      # not just an authenticated session. See bearerAdminAuth description.
       security:
-        - bearerAuth: []
+        - bearerAdminAuth: []
       parameters:
         - name: id
           in: path
@@ -884,6 +976,14 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/WithdrawalResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Caller is authenticated but lacks the payouts:trigger permission
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '409':
           $ref: '#/components/responses/Error'
         default:
@@ -896,6 +996,7 @@ paths:
       operationId: getListingById
       tags:
         - Whistleblower
+      security: []
       parameters:
         - name: id
           in: path
@@ -1022,6 +1123,9 @@ paths:
       operationId: confirmPayment
       tags:
         - Payments
+      # NOTE: createPaymentsRouter() applies no auth middleware to this route today (see PR
+      # description — code/spec mismatch finding). security:[] reflects the current code.
+      security: []
       requestBody:
         required: true
         content:
@@ -1089,6 +1193,9 @@ paths:
       operationId: createDeal
       tags:
         - Deals
+      # NOTE: createDealsRouter() applies no auth middleware to any /api/deals route today
+      # (see PR description — code/spec mismatch finding). security:[] reflects current code.
+      security: []
       requestBody:
         required: true
         content:
@@ -1170,6 +1277,7 @@ paths:
       operationId: getDeals
       tags:
         - Deals
+      security: []
       parameters:
         - name: tenantId
           in: query
@@ -1231,6 +1339,7 @@ paths:
       operationId: getDealById
       tags:
         - Deals
+      security: []
       parameters:
         - name: dealId
           in: path
@@ -1269,6 +1378,7 @@ paths:
       operationId: updateDealStatus
       tags:
         - Deals
+      security: []
       parameters:
         - name: dealId
           in: path
@@ -1315,6 +1425,7 @@ paths:
       operationId: updateScheduleItemStatus
       tags:
         - Deals
+      security: []
       parameters:
         - name: dealId
           in: path
@@ -1373,6 +1484,7 @@ paths:
       operationId: getDealProgress
       tags:
         - Deals
+      security: []
       parameters:
         - name: dealId
           in: path
@@ -1437,6 +1549,10 @@ paths:
       operationId: markRewardPaid
       tags:
         - Admin
+      # NOTE: this handler calls neither requireAdminSecret nor authenticateToken — it is
+      # unauthenticated in code today despite being an admin payout action (see PR
+      # description — code/spec mismatch finding). security:[] reflects current code.
+      security: []
       parameters:
         - name: rewardId
           in: path
@@ -1568,6 +1684,10 @@ paths:
       operationId: adminListWhistleblowerListings
       tags:
         - Admin
+      # NOTE: this handler calls neither requireAdminSecret nor authenticateToken — it is
+      # unauthenticated in code today (see PR description — code/spec mismatch finding).
+      # security:[] reflects current code.
+      security: []
       parameters:
         - name: status
           in: query
@@ -1623,6 +1743,10 @@ paths:
       operationId: approveWhistleblowerListing
       tags:
         - Admin
+      # NOTE: this handler calls neither requireAdminSecret nor authenticateToken — it is
+      # unauthenticated in code today (see PR description — code/spec mismatch finding).
+      # security:[] reflects current code.
+      security: []
       parameters:
         - name: id
           in: path
@@ -1695,6 +1819,10 @@ paths:
       operationId: rejectWhistleblowerListing
       tags:
         - Admin
+      # NOTE: this handler calls neither requireAdminSecret nor authenticateToken — it is
+      # unauthenticated in code today (see PR description — code/spec mismatch finding).
+      # security:[] reflects current code.
+      security: []
       parameters:
         - name: id
           in: path
@@ -1780,6 +1908,9 @@ paths:
       operationId: stakeTokens
       tags:
         - Staking
+      # NOTE: createStakingRouter() applies no auth middleware to this route today (see PR
+      # description — code/spec mismatch finding). security:[] reflects current code.
+      security: []
       requestBody:
         required: true
         content:
@@ -1835,6 +1966,9 @@ paths:
       operationId: unstakeTokens
       tags:
         - Staking
+      # NOTE: createStakingRouter() applies no auth middleware to this route today (see PR
+      # description — code/spec mismatch finding). security:[] reflects current code.
+      security: []
       requestBody:
         required: true
         content:
@@ -1890,6 +2024,9 @@ paths:
       operationId: claimStakingRewards
       tags:
         - Staking
+      # NOTE: createStakingRouter() applies no auth middleware to this route today (see PR
+      # description — code/spec mismatch finding). security:[] reflects current code.
+      security: []
       requestBody:
         required: true
         content:
@@ -1940,6 +2077,8 @@ paths:
       operationId: getStakingPosition
       tags:
         - Staking
+      security:
+        - bearerAuth: []
       responses:
         '200':
           description: Staking position retrieved successfully
@@ -1952,6 +2091,8 @@ paths:
                 position:
                   staked: "1000.000000"
                   claimable: "50.250000"
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         default:
           $ref: '#/components/responses/Error'
 
@@ -2056,6 +2197,10 @@ paths:
       operationId: initiateStakingDeposit
       tags:
         - Staking
+      # NOTE: identity here comes from the trusted x-user-id header (see description), not a
+      # bearer token — the route has no authenticateToken/bearerAuth check (see PR
+      # description — code/spec mismatch finding). security:[] reflects current code.
+      security: []
       parameters:
         - in: header
           name: x-user-id
@@ -2131,10 +2276,12 @@ paths:
   /api/webhooks/payments/{rail}:
     post:
       summary: Payments webhook
-      description: Ingest payment provider webhook. Idempotent by (rail, externalRef). Signature validation can be enabled.
+      description: Ingest payment provider webhook. Idempotent by provider event ID plus canonical reference. Signature validation is always enforced in production and can be enabled in non-production with WEBHOOK_SIGNATURE_ENABLED=true.
       operationId: paymentsWebhook
       tags:
         - Webhooks
+      security:
+        - webhookSignature: []
       parameters:
         - name: rail
           in: path
@@ -3535,6 +3682,27 @@ components:
       type: http
       scheme: bearer
       bearerFormat: token
+      description: >-
+        Ordinary authenticated-session bearer token (authenticateToken middleware only —
+        no elevated role/permission required).
+    bearerAdminAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: token
+      description: >-
+        Same bearer token as bearerAuth, but the route additionally requires the caller's
+        session to carry an admin-tier RBAC permission (requirePermission(resource, action)
+        in middleware/rbac.ts, e.g. payouts:trigger) or an explicit admin/super_admin role
+        check. Kept as a distinct scheme name so admin-gated operations are visibly
+        distinguishable from ordinary authenticated ones in this document.
+    webhookSignature:
+      type: apiKey
+      in: header
+      name: X-Webhook-Signature
+      description: >-
+        Provider-specific HMAC signature header verified server-side instead of a bearer
+        token (e.g. x-paystack-signature for Paystack, verif-hash for Flutterwave). The
+        header name varies by payment rail; see the payments webhook handler.
 
 tags:
   - name: Health

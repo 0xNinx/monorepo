@@ -58,7 +58,7 @@ class ConversionStore {
     }
 
     const params: any[] = []
-    const where: string[] = []
+    const where: string[] = ['deleted_at IS NULL']
     if (status) {
       params.push(status)
       where.push(`status = $${params.length}`)
@@ -85,7 +85,7 @@ class ConversionStore {
       return this.byId.get(conversionId) ?? null
     }
 
-    const { rows } = await pool.query(`SELECT * FROM conversions WHERE conversion_id=$1`, [conversionId])
+    const { rows } = await pool.query(`SELECT * FROM conversions WHERE conversion_id=$1 AND deleted_at IS NULL`, [conversionId])
     const row = rows[0]
     if (!row) return null
 
@@ -107,7 +107,7 @@ class ConversionStore {
     }
 
     const { rows } = await pool.query(
-      `SELECT * FROM conversions WHERE deposit_id=$1 ORDER BY created_at DESC LIMIT 1`,
+      `SELECT * FROM conversions WHERE deposit_id=$1 AND deleted_at IS NULL ORDER BY created_at DESC LIMIT 1`,
       [depositId],
     )
     const row = rows[0]
@@ -258,7 +258,7 @@ class ConversionStore {
       )
     }
 
-    const { rows } = await pool.query(`SELECT * FROM conversions WHERE status='completed'`)
+    const { rows } = await pool.query(`SELECT * FROM conversions WHERE status='completed' AND deleted_at IS NULL`)
     return rows.map(mapRow).sort(
       (a, b) => a.createdAt.getTime() - b.createdAt.getTime(),
     )

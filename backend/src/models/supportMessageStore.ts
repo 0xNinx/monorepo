@@ -95,7 +95,7 @@ class PostgresSupportMessageStore implements SupportMessageStorePort {
   async listAll(): Promise<SupportMessage[]> {
     const pool = await this.pool()
     const { rows } = await pool.query(
-      `SELECT * FROM support_messages ORDER BY created_at DESC`,
+      `SELECT * FROM support_messages WHERE deleted_at IS NULL ORDER BY created_at DESC`,
     )
     return rows.map((r) => this.mapRow(r as SupportMessageRow))
   }

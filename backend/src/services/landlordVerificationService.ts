@@ -39,8 +39,8 @@ export async function getLandlordVerificationPublic(landlordId: string) {
   const { rows } = await pool.query(
     `SELECT u.id AS user_id, p.verification_level AS level, p.verified_at
      FROM users u
-     LEFT JOIN landlord_profiles p ON u.id = p.user_id
-     WHERE u.id = $1 AND u.role = 'landlord'`,
+     LEFT JOIN landlord_profiles p ON u.id = p.user_id AND p.deleted_at IS NULL
+     WHERE u.id = $1 AND u.role = 'landlord' AND u.deleted_at IS NULL`,
     [landlordId],
   )
 

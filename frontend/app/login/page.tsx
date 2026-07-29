@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, Suspense } from "react";
+import React, { Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { ArrowRight, Loader2, Wallet } from "lucide-react";
@@ -11,39 +11,51 @@ import { StellarWalletConnect } from "@/components/wallet/StellarWalletConnect";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { loginSchema, type LoginFormData } from "@/lib/schemas";
+import { loginSchema, type LoginFormValues } from "@/lib/formSchemas";
+import { parseFormError } from "@/lib/formErrors";
 
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const returnTo = searchParams.get("returnTo");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   const {
     register,
     handleSubmit,
-    formState: { errors },
-  } = useForm<LoginFormData>({
+    setError,
+    setFocus,
+    clearErrors,
+    formState: { errors, isSubmitting },
+  } = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
+    mode: "onBlur",
+    reValidateMode: "onBlur",
+    shouldFocusError: true,
   });
 
-  const onSubmit = async (data: LoginFormData) => {
-    setError(null);
-    setLoading(true);
+  const onSubmit = async (data: LoginFormValues) => {
+    if (isSubmitting) return;
 
+    clearErrors("root");
     try {
       await requestOtp(data.email);
-      
-      const verifyOtpUrl = returnTo 
+
+      const verifyOtpUrl = returnTo
         ? `/verify-otp?email=${encodeURIComponent(data.email)}&returnTo=${encodeURIComponent(returnTo)}`
         : `/verify-otp?email=${encodeURIComponent(data.email)}`;
-      
+
       router.push(verifyOtpUrl);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong");
-    } finally {
-      setLoading(false);
+    } catch (error) {
+      const { message, fieldErrors } = parseFormError(error, "Something went wrong");
+      const firstField = Object.keys(fieldErrors)[0];
+
+      if (firstField === "email") {
+        setError("email", { type: "server", message: fieldErrors.email });
+        setFocus("email");
+        return;
+      }
+
+      setError("root.serverError", { type: "server", message });
     }
   };
 
@@ -54,9 +66,7 @@ function LoginForm() {
           <Link href="/" className="inline-block font-mono text-3xl font-black">
             SHELTER<span className="text-primary">FLEX</span>
           </Link>
-          <p className="mt-2 text-muted-foreground">
-            Choose your sign-in method
-          </p>
+          <p className="mt-2 text-muted-foreground">Choose your sign-in method</p>
         </div>
 
         <div className="border-3 border-foreground bg-card p-8 shadow-[8px_8px_0px_0px_rgba(26,26,26,1)]">
@@ -74,32 +84,36 @@ function LoginForm() {
             </TabsList>
 
             <TabsContent value="email" className="space-y-4">
-              {error && (
-                <div className="border-2 border-destructive bg-destructive/10 p-3 text-sm font-medium text-destructive">
-                  {error}
+              {errors.root?.serverError?.message && (
+                <div
+                  role="alert"
+                  className="border-2 border-destructive bg-destructive/10 p-3 text-sm font-medium text-destructive"
+                >
+                  {errors.root.serverError.message}
                 </div>
               )}
 
-              <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+              <form onSubmit={handleSubmit(onSubmit)} className="space-y-6" noValidate>
                 <div className="space-y-2">
-                  <label
-                    htmlFor="email"
-                    className="block font-mono text-sm font-bold"
-                  >
+                  <label htmlFor="email" className="block font-mono text-sm font-bold">
                     Email Address
                   </label>
                   <Input
                     id="email"
                     type="email"
-                    {...register("email")}
+                    {...register("email", {
+                      onChange: () => clearErrors(["email", "root.serverError"]),
+                    })}
                     placeholder="you@email.com"
+                    aria-invalid={Boolean(errors.email)}
+                    aria-describedby={errors.email ? "login-email-error" : undefined}
                     className={`border-3 border-foreground py-6 shadow-[4px_4px_0px_0px_rgba(26,26,26,1)] focus:translate-x-0.5 focus:translate-y-0.5 focus:shadow-[2px_2px_0px_0px_rgba(26,26,26,1)] ${
                       errors.email ? "border-destructive" : ""
                     }`}
-                    disabled={loading}
+                    disabled={isSubmitting}
                   />
-                  {errors.email && (
-                    <p className="text-xs font-bold text-destructive">
+                  {errors.email?.message && (
+                    <p id="login-email-error" role="alert" className="text-xs font-bold text-destructive">
                       {errors.email.message}
                     </p>
                   )}
@@ -107,15 +121,15 @@ function LoginForm() {
 
                 <Button
                   type="submit"
-                  disabled={loading}
+                  disabled={isSubmitting}
                   className="w-full border-3 border-foreground bg-primary px-8 py-6 text-lg font-bold shadow-[4px_4px_0px_0px_rgba(26,26,26,1)] transition-all hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-[2px_2px_0px_0px_rgba(26,26,26,1)] disabled:opacity-60"
                 >
-                  {loading ? (
+                  {isSubmitting ? (
                     <Loader2 className="mr-2 h-5 w-5 animate-spin" />
                   ) : (
                     <ArrowRight className="ml-2 h-5 w-5" />
                   )}
-                  {loading ? "Sending OTP..." : "Continue"}
+                  {isSubmitting ? "Sending OTP..." : "Continue"}
                 </Button>
               </form>
             </TabsContent>
@@ -128,10 +142,7 @@ function LoginForm() {
           <div className="mt-6 text-center">
             <p className="text-muted-foreground">
               Don&apos;t have an account?{" "}
-              <Link
-                href="/signup"
-                className="font-bold text-primary hover:underline"
-              >
+              <Link href="/signup" className="font-bold text-primary hover:underline">
                 Sign up
               </Link>
             </p>

@@ -1,14 +1,15 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { Building2, CreditCard, Wallet } from "lucide-react";
-import { DashboardHeader } from "@/components/dashboard-header";
+import { useEffect, useState } from "react";
 import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from "@/components/ui/tabs";
+  Building2,
+  CreditCard,
+  Wallet,
+  Loader2,
+  AlertTriangle,
+} from "lucide-react";
+import { DashboardHeader } from "@/components/dashboard-header";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Empty,
@@ -19,15 +20,19 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  userRentalApplications,
-  userSavedProperties,
-  userWalletBalance,
-  userWalletLedger,
-} from "@/lib/mockData";
 import { UserPropertyCard } from "@/components/user-dashboard/UserPropertyCard";
 import { ApplicationsTable } from "@/components/user-dashboard/ApplicationsTable";
 import { WalletLedgerTable } from "@/components/user-dashboard/WalletLedgerTable";
+import { getNgnBalance, getNgnLedger } from "@/lib/walletApi";
+import { listTenantApplications } from "@/lib/tenantApi";
+import { fetchSavedListingIds } from "@/lib/savedPropertiesApi";
+import { listPublicListings } from "@/lib/propertiesApi";
+import type {
+  WalletBalance,
+  UserRentalApplication,
+  UserSavedProperty,
+  WalletLedgerEntry,
+} from "@/lib/types/dashboard";
 
 function formatNgn(amount: number) {
   return new Intl.NumberFormat("en-NG", {
@@ -42,17 +47,108 @@ export default function UserDashboardPage() {
 
   const [activeTab, setActiveTab] = useState<TabValue>("my-properties");
 
-  const [isLoading, setIsLoading] = useState(true);
+  const [savedProperties, setSavedProperties] = useState<UserSavedProperty[]>(
+    [],
+  );
+  const [applications, setApplications] = useState<UserRentalApplication[]>([]);
+  const [walletBalance, setWalletBalance] = useState<WalletBalance | null>(
+    null,
+  );
+  const [ledgerEntries, setLedgerEntries] = useState<WalletLedgerEntry[]>([]);
+
+  const [savedLoading, setSavedLoading] = useState(true);
+  const [savedError, setSavedError] = useState<string | null>(null);
+  const [appsLoading, setAppsLoading] = useState(true);
+  const [appsError, setAppsError] = useState<string | null>(null);
+  const [walletLoading, setWalletLoading] = useState(true);
+  const [walletError, setWalletError] = useState<string | null>(null);
 
   useEffect(() => {
-    const t = setTimeout(() => setIsLoading(false), 400);
-    return () => clearTimeout(t);
+    fetchSavedListingIds()
+      .then((ids) => {
+        if (ids.length === 0) {
+          setSavedProperties([]);
+          return;
+        }
+        return listPublicListings({ listingIds: ids }).then((listings) => {
+          const props: UserSavedProperty[] = listings.data.map((l) => ({
+            id: parseInt(l.listingId, 10),
+            title: l.address,
+            location: [l.area, l.city].filter(Boolean).join(", "),
+            priceNgnPerYear: l.annualRentNgn,
+          }));
+          setSavedProperties(props);
+        });
+      })
+      .catch((err) => {
+        console.error("Failed to load saved properties:", err);
+        setSavedError(
+          err instanceof Error
+            ? err.message
+            : "Failed to load saved properties",
+        );
+      })
+      .finally(() => setSavedLoading(false));
   }, []);
 
-  const savedProperties = useMemo(() => userSavedProperties, []);
-  const applications = useMemo(() => userRentalApplications, []);
-  const walletBalance = useMemo(() => userWalletBalance, []);
-  const ledgerEntries = useMemo(() => userWalletLedger, []);
+  useEffect(() => {
+    listTenantApplications()
+      .then((res) => {
+        const apps: UserRentalApplication[] = res.data.map((app) => ({
+          id: app.applicationId,
+          property: {
+            title: app.propertyTitle || "Property",
+            location: app.propertyLocation || "Location",
+            priceNgnPerYear: app.annualRent,
+          },
+          status: app.status as UserRentalApplication["status"],
+          submittedAt: app.createdAt,
+        }));
+        setApplications(apps);
+        setAppsError(null);
+      })
+      .catch((err) => {
+        console.error("Failed to load applications:", err);
+        setAppsError(
+          err instanceof Error ? err.message : "Failed to load applications",
+        );
+      })
+      .finally(() => setAppsLoading(false));
+  }, []);
+
+  useEffect(() => {
+    Promise.all([getNgnBalance(), getNgnLedger({ limit: 20 })])
+      .then(([balanceRes, ledgerRes]) => {
+        const balance: WalletBalance = {
+          availableNgn: balanceRes.availableNgn,
+          heldNgn: balanceRes.heldNgn,
+          totalNgn: balanceRes.totalNgn,
+          availableUsdc: "0.00",
+          heldUsdc: "0.00",
+          totalUsdc: "0.00",
+        };
+        setWalletBalance(balance);
+
+        const entries: WalletLedgerEntry[] = ledgerRes.entries.map((e) => ({
+          id: e.id,
+          type: e.type as WalletLedgerEntry["type"],
+          amountNgn: e.amountNgn,
+          amountUsdc: e.amountUsdc,
+          status: e.status,
+          timestamp: e.timestamp,
+          reference: e.reference || null,
+        }));
+        setLedgerEntries(entries);
+        setWalletError(null);
+      })
+      .catch((err) => {
+        console.error("Failed to load wallet:", err);
+        setWalletError(
+          err instanceof Error ? err.message : "Failed to load wallet",
+        );
+      })
+      .finally(() => setWalletLoading(false));
+  }, []);
 
   return (
     <div className="min-h-screen bg-background">
@@ -69,9 +165,15 @@ export default function UserDashboardPage() {
             </p>
           </div>
 
-          <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabValue)}>
+          <Tabs
+            value={activeTab}
+            onValueChange={(v) => setActiveTab(v as TabValue)}
+          >
             <TabsList className="w-full md:w-fit">
-              <TabsTrigger value="my-properties" className="flex-1 md:flex-none">
+              <TabsTrigger
+                value="my-properties"
+                className="flex-1 md:flex-none"
+              >
                 <Building2 className="h-4 w-4" />
                 My Properties
               </TabsTrigger>
@@ -86,12 +188,26 @@ export default function UserDashboardPage() {
             </TabsList>
 
             <TabsContent value="my-properties" className="mt-4">
-              {isLoading ? (
+              {savedLoading ? (
                 <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                   {Array.from({ length: 6 }).map((_, i) => (
                     <Skeleton key={i} className="h-24 w-full" />
                   ))}
                 </div>
+              ) : savedError ? (
+                <Card className="border-3 border-foreground bg-destructive/10 p-6">
+                  <div className="flex items-start gap-3">
+                    <AlertTriangle className="h-5 w-5 shrink-0 text-destructive" />
+                    <div>
+                      <p className="font-bold">
+                        Failed to load saved properties
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        {savedError}
+                      </p>
+                    </div>
+                  </div>
+                </Card>
               ) : savedProperties.length === 0 ? (
                 <Empty className="border-2 border-foreground/20 bg-card">
                   <EmptyHeader>
@@ -108,23 +224,27 @@ export default function UserDashboardPage() {
               ) : (
                 <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                   {savedProperties.map((p) => (
-                    <UserPropertyCard
-                      key={p.id}
-                      property={{
-                        id: p.id,
-                        title: p.title,
-                        location: p.location,
-                        priceNgnPerYear: p.priceNgnPerYear,
-                      }}
-                    />
+                    <UserPropertyCard key={p.id} property={p} />
                   ))}
                 </div>
               )}
             </TabsContent>
 
             <TabsContent value="applications" className="mt-4">
-              {isLoading ? (
+              {appsLoading ? (
                 <Skeleton className="h-64 w-full" />
+              ) : appsError ? (
+                <Card className="border-3 border-foreground bg-destructive/10 p-6">
+                  <div className="flex items-start gap-3">
+                    <AlertTriangle className="h-5 w-5 shrink-0 text-destructive" />
+                    <div>
+                      <p className="font-bold">Failed to load applications</p>
+                      <p className="text-sm text-muted-foreground">
+                        {appsError}
+                      </p>
+                    </div>
+                  </div>
+                </Card>
               ) : applications.length === 0 ? (
                 <Empty className="border-2 border-foreground/20 bg-card">
                   <EmptyHeader>
@@ -133,7 +253,8 @@ export default function UserDashboardPage() {
                     </EmptyMedia>
                     <EmptyTitle>No applications yet</EmptyTitle>
                     <EmptyDescription>
-                      When you submit rental applications, they will appear here.
+                      When you submit rental applications, they will appear
+                      here.
                     </EmptyDescription>
                   </EmptyHeader>
                   <EmptyContent />
@@ -151,7 +272,7 @@ export default function UserDashboardPage() {
             </TabsContent>
 
             <TabsContent value="wallet" className="mt-4">
-              {isLoading ? (
+              {walletLoading ? (
                 <div className="grid gap-4">
                   <div className="grid gap-4 md:grid-cols-3">
                     <Skeleton className="h-28 w-full" />
@@ -160,7 +281,19 @@ export default function UserDashboardPage() {
                   </div>
                   <Skeleton className="h-64 w-full" />
                 </div>
-              ) : (
+              ) : walletError ? (
+                <Card className="border-3 border-foreground bg-destructive/10 p-6">
+                  <div className="flex items-start gap-3">
+                    <AlertTriangle className="h-5 w-5 shrink-0 text-destructive" />
+                    <div>
+                      <p className="font-bold">Failed to load wallet</p>
+                      <p className="text-sm text-muted-foreground">
+                        {walletError}
+                      </p>
+                    </div>
+                  </div>
+                </Card>
+              ) : walletBalance ? (
                 <div className="grid gap-4">
                   <div className="grid gap-4 md:grid-cols-3">
                     <Card className="border-2 border-foreground/20">
@@ -234,7 +367,7 @@ export default function UserDashboardPage() {
                     </Card>
                   )}
                 </div>
-              )}
+              ) : null}
             </TabsContent>
           </Tabs>
         </div>

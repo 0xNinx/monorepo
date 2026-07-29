@@ -5,6 +5,10 @@ import {
   webhookSubscriptionStore,
   webhookDeliveryStore,
 } from '../models/webhookSubscription.js'
+import { logger } from '../utils/logger.js'
+
+const MAX_DELIVERY_ATTEMPTS = 5
+const DELIVERY_TIMEOUT_MS = parseInt(process.env.WEBHOOK_DELIVERY_TIMEOUT_MS ?? '10000', 10)
 
 // Exponential backoff values in milliseconds: 1m, 5m, 30m, 2h, 8h
 const BACKOFF_MS = [
@@ -21,7 +25,8 @@ export function computeHmacSignature(payload: string, secret: string): string {
 
 export async function enqueueDelivery(
   event: WebhookEventType,
-  payload: Record<string, unknown>
+  payload: Record<string, unknown>,
+  options?: { requestId?: string }
 ): Promise<void> {
   const activeSubs = webhookSubscriptionStore.listActiveByEvent(event)
   const scheduler = getScheduler()
@@ -31,7 +36,8 @@ export async function enqueueDelivery(
       subscriptionId: sub.id,
       event,
       payload,
-      attemptCount: 0
+      attemptCount: 0,
+      requestId: options?.requestId,
     }
 
     await scheduler.schedule({
@@ -48,8 +54,9 @@ export async function processWebhookDeliveryJob(jobPayload: {
   event: WebhookEventType
   payload: Record<string, unknown>
   attemptCount: number
+  requestId?: string
 }): Promise<void> {
-  const { subscriptionId, event, payload, attemptCount } = jobPayload
+  const { subscriptionId, event, payload, attemptCount, requestId } = jobPayload
   const sub = webhookSubscriptionStore.findById(subscriptionId)
   if (!sub || !sub.active) {
     return
@@ -73,6 +80,7 @@ export async function processWebhookDeliveryJob(jobPayload: {
         'X-Webhook-Signature': signature,
       },
       body: bodyString,
+      signal: AbortSignal.timeout(DELIVERY_TIMEOUT_MS),
     })
 
     responseCode = res.status
@@ -90,16 +98,17 @@ export async function processWebhookDeliveryJob(jobPayload: {
     subscriptionId,
     event,
     payload,
-    status: status === 'delivered' ? 'delivered' : (currentAttempt >= 5 ? 'permanently_failed' : 'failed'),
+    status: status === 'delivered' ? 'delivered' : (currentAttempt >= MAX_DELIVERY_ATTEMPTS ? 'permanently_failed' : 'failed'),
     responseCode,
     responseBody: truncatedBody,
+    requestId,
   })
 
   if (status === 'delivered') {
     return
   }
 
-  if (currentAttempt < 5) {
+  if (currentAttempt < MAX_DELIVERY_ATTEMPTS) {
     const delay = BACKOFF_MS[currentAttempt - 1] || 60 * 1000
     const nextRunAt = new Date(Date.now() + delay)
 
@@ -110,12 +119,18 @@ export async function processWebhookDeliveryJob(jobPayload: {
         subscriptionId,
         event,
         payload,
-        attemptCount: currentAttempt
+        attemptCount: currentAttempt,
+        requestId,
       },
       nextRunAt,
       maxRetries: 0
     })
   } else {
-    webhookSubscriptionStore.updateActive(subscriptionId, false)
+    logger.warn('webhook.delivery.dead_lettered', {
+      subscriptionId,
+      event,
+      attempts: currentAttempt,
+      targetUrl: sub.targetUrl,
+    })
   }
 }

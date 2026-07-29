@@ -70,7 +70,7 @@ export class TenantDocumentRepository {
 
     const { rows } = await pool.query(
       `SELECT id, user_id, file_name, file_format, file_size_bytes, category, description, deal_id, is_landlord_uploaded, created_at
-       FROM tenant_documents WHERE id = $1 AND user_id = $2`,
+       FROM tenant_documents WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL`,
       [id, userId],
     )
 
@@ -103,7 +103,7 @@ export class TenantDocumentRepository {
     const pool = await getPool()
     if (!pool) throw new Error('Database not configured')
 
-    const conditions: string[] = ['user_id = $1']
+    const conditions: string[] = ['user_id = $1', 'deleted_at IS NULL']
     const params: unknown[] = [userId]
     let paramIndex = 2
 
@@ -156,7 +156,7 @@ export class TenantDocumentRepository {
     if (!pool) throw new Error('Database not configured')
 
     const { rows, rowCount } = await pool.query(
-      `DELETE FROM tenant_documents WHERE id = $1 AND user_id = $2 RETURNING storage_key`,
+      `UPDATE tenant_documents SET deleted_at = NOW() WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL RETURNING storage_key`,
       [id, userId],
     )
 
@@ -172,7 +172,7 @@ export class TenantDocumentRepository {
     if (!pool) throw new Error('Database not configured')
 
     const { rows } = await pool.query(
-      `SELECT COALESCE(SUM(file_size_bytes), 0)::int AS total FROM tenant_documents WHERE user_id = $1`,
+      `SELECT COALESCE(SUM(file_size_bytes), 0)::int AS total FROM tenant_documents WHERE user_id = $1 AND deleted_at IS NULL`,
       [userId],
     )
 
@@ -184,7 +184,7 @@ export class TenantDocumentRepository {
     if (!pool) throw new Error('Database not configured')
 
     const { rows } = await pool.query(
-      `SELECT storage_key FROM tenant_documents WHERE id = $1 AND user_id = $2`,
+      `SELECT storage_key FROM tenant_documents WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL`,
       [id, userId],
     )
 

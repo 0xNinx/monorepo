@@ -1,6 +1,7 @@
-import { readFile, readdir } from 'node:fs/promises'
+import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { Pool } from 'pg'
+import { getOrderedMigrationFiles } from './migrationOrdering.js'
 
 const DB_CONNECT_RETRIES = parseInt(process.env.DB_CONNECT_RETRIES ?? '5', 10)
 const DB_CONNECT_RETRY_MS = parseInt(process.env.DB_CONNECT_RETRY_MS ?? '2000', 10)
@@ -52,9 +53,7 @@ export async function runMigrationsIfNeeded() {
       )
     `)
 
-    const files = (await readdir(migrationsDir))
-      .filter((file) => file.endsWith('.sql'))
-      .sort((a, b) => a.localeCompare(b))
+    const files = await getOrderedMigrationFiles(migrationsDir)
 
     for (const file of files) {
       const alreadyApplied = await pool.query(

@@ -40,6 +40,12 @@ export const rateLimitProfiles = {
     keyPrefix: 'rl:admin_bulk',
     keyBy: 'user',
   },
+  messaging: {
+    points: 30,
+    duration: 60, // 1 minute
+    keyPrefix: 'rl:messaging',
+    keyBy: 'user',
+  },
 } as const satisfies Record<string, RateLimiterOptions>
 
 export type RateLimitProfileName = keyof typeof rateLimitProfiles

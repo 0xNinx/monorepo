@@ -62,6 +62,18 @@ export interface LandlordAnalytics {
   vacancyMetrics: VacancyMetrics;
 }
 
+export interface LandlordTenant {
+  id: string;
+  name: string;
+  property: string;
+  status: string;
+  leaseStart: string;
+  leaseEnd: string;
+  monthlyPayment: number;
+  totalPaid: number;
+  verified: boolean;
+}
+
 export const landlordApi = {
   getDashboardData: async (): Promise<LandlordDashboardData> => {
     return apiFetch<LandlordDashboardData>("/api/landlord/dashboard");
@@ -73,6 +85,10 @@ export const landlordApi = {
 
   getProperty: async (id: string | number): Promise<LandlordProperty> => {
     return apiFetch<LandlordProperty>(`/api/landlord/properties/${id}`);
+  },
+
+  getTenants: async (): Promise<LandlordTenant[]> => {
+    return apiFetch<LandlordTenant[]>("/api/landlord/tenants");
   },
 
   getApplications: async (): Promise<any[]> => {

@@ -36,6 +36,19 @@ export const signupSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters"),
 });
 
+export const accountSignupSchema = z.object({
+  fullName: z.string().min(2, "Full name must be at least 2 characters"),
+  email: emailSchema,
+  phone: z.string().min(10, "Phone number must be at least 10 digits"),
+  password: z
+    .string()
+    .min(8, "Password must be at least 8 characters")
+    .regex(/\d/, "Password must contain at least one number"),
+  terms: z.literal(true, {
+    errorMap: () => ({ message: "You must agree to the Terms and Privacy Policy" }),
+  }),
+});
+
 // ── Staking ───────────────────────────────────────────────────────────────────
 
 export const stakeSchema = z.object({
@@ -102,6 +115,7 @@ export const preScreenSchema = z.object({
 export type LoginFormValues = z.infer<typeof loginSchema>;
 export type OtpFormValues = z.infer<typeof otpSchema>;
 export type SignupFormValues = z.infer<typeof signupSchema>;
+export type AccountSignupFormValues = z.infer<typeof accountSignupSchema>;
 export type StakeFormValues = z.infer<typeof stakeSchema>;
 export type DepositFormValues = z.infer<typeof depositSchema>;
 export type WhistleblowerFormValues = z.infer<typeof whistleblowerSchema>;

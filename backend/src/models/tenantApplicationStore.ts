@@ -211,7 +211,7 @@ export class PostgresTenantApplicationStore implements TenantApplicationStore {
         reviewed_by,
         rejection_reason
       FROM tenant_applications
-      WHERE id = $1`,
+      WHERE id = $1 AND deleted_at IS NULL`,
       [applicationId],
     );
 
@@ -251,6 +251,7 @@ export class PostgresTenantApplicationStore implements TenantApplicationStore {
         rejection_reason
       FROM tenant_applications
       WHERE user_id = $1
+        AND deleted_at IS NULL
     `;
 
     if (filters?.status) {
@@ -260,7 +261,7 @@ export class PostgresTenantApplicationStore implements TenantApplicationStore {
 
     if (filters?.cursor) {
       params.push(filters.cursor);
-      query += ` AND created_at < (SELECT created_at FROM tenant_applications WHERE id = $${params.length})`;
+      query += ` AND created_at < (SELECT created_at FROM tenant_applications WHERE id = $${params.length} AND deleted_at IS NULL)`;
     }
 
     query += ` ORDER BY created_at DESC LIMIT $2`;
@@ -290,7 +291,7 @@ export class PostgresTenantApplicationStore implements TenantApplicationStore {
     const result = await pool.query(
       `UPDATE tenant_applications
       SET status = $1, reviewed_at = NOW(), reviewed_by = $2, rejection_reason = $3, updated_at = NOW()
-      WHERE id = $4
+      WHERE id = $4 AND deleted_at IS NULL
       RETURNING 
         id as application_id,
         user_id,

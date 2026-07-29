@@ -10,6 +10,11 @@ export interface OfflineQueueEntry {
   retryCount: number
 }
 
+export interface OfflineQueueFailure extends OfflineQueueEntry {
+  failedAt: string
+  reason: string
+}
+
 export type FlushStatus = 'idle' | 'replaying' | 'completed' | 'partial' | 'failed'
 
 export interface FlushProgress {
@@ -19,7 +24,8 @@ export interface FlushProgress {
   failedCount: number
 }
 
-const STORAGE_KEY = 'shelterflex-offline-queue'
+export const OFFLINE_QUEUE_STORAGE_KEY = 'shelterflex-offline-queue'
+export const OFFLINE_QUEUE_FAILURE_STORAGE_KEY = 'shelterflex-offline-queue-failures'
 
 const MAX_RETRIES_PER_ITEM = 3
 const BASE_BACKOFF_MS = 500
@@ -32,36 +38,64 @@ function getStorage() {
   return window.localStorage
 }
 
-function readQueue(): OfflineQueueEntry[] {
+function readEntries<T>(storageKey: string): T[] {
   const storage = getStorage()
   if (!storage) {
     return []
   }
 
-  const raw = storage.getItem(STORAGE_KEY)
+  const raw = storage.getItem(storageKey)
   if (!raw) {
     return []
   }
 
   try {
-    return JSON.parse(raw) as OfflineQueueEntry[]
+    return JSON.parse(raw) as T[]
   } catch {
-    storage.removeItem(STORAGE_KEY)
+    storage.removeItem(storageKey)
     return []
   }
 }
 
-function writeQueue(entries: OfflineQueueEntry[]) {
+function readQueue(): OfflineQueueEntry[] {
+  return readEntries<OfflineQueueEntry>(OFFLINE_QUEUE_STORAGE_KEY)
+}
+
+function readFailures(): OfflineQueueFailure[] {
+  return readEntries<OfflineQueueFailure>(OFFLINE_QUEUE_FAILURE_STORAGE_KEY)
+}
+
+function writeEntries<T>(
+  storageKey: string,
+  eventName: string,
+  entries: T[],
+  detail: Record<string, number>,
+) {
   const storage = getStorage()
   if (!storage) {
     return
   }
 
-  storage.setItem(STORAGE_KEY, JSON.stringify(entries))
+  storage.setItem(storageKey, JSON.stringify(entries))
   window.dispatchEvent(
-    new CustomEvent('offline-queue-updated', {
-      detail: { count: entries.length },
+    new CustomEvent(eventName, {
+      detail,
     }),
+  )
+}
+
+function writeQueue(entries: OfflineQueueEntry[]) {
+  writeEntries(OFFLINE_QUEUE_STORAGE_KEY, 'offline-queue-updated', entries, {
+    count: entries.length,
+  })
+}
+
+function writeFailures(entries: OfflineQueueFailure[]) {
+  writeEntries(
+    OFFLINE_QUEUE_FAILURE_STORAGE_KEY,
+    'offline-queue-failures-updated',
+    entries,
+    { count: entries.length },
   )
 }
 
@@ -87,12 +121,18 @@ export function getOfflineQueueCount() {
   return readQueue().length
 }
 
+export function getOfflineQueueFailures() {
+  return readFailures()
+}
+
 export function enqueueOfflineRequest(
   entry: Omit<OfflineQueueEntry, 'id' | 'createdAt' | 'retryCount'>,
 ) {
-  const idempotencyKey = `idem_${Date.now().toString(36)}_${Math.random()
-    .toString(36)
-    .slice(2, 10)}`
+  const existingIdempotencyKey =
+    entry.headers['Idempotency-Key'] ?? entry.headers['idempotency-key']
+  const idempotencyKey =
+    existingIdempotencyKey ??
+    `idem_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`
 
   const entries = readQueue()
   entries.push({
@@ -114,7 +154,21 @@ export function clearOfflineQueue() {
   writeQueue([])
 }
 
+export function clearOfflineQueueFailures() {
+  writeFailures([])
+}
+
 export type ReconciliationCallback = (processed: number) => Promise<void>
+
+function recordFailure(entry: OfflineQueueEntry, reason: string) {
+  const failures = readFailures()
+  failures.push({
+    ...entry,
+    failedAt: new Date().toISOString(),
+    reason,
+  })
+  writeFailures(failures)
+}
 
 export async function flushOfflineQueue(
   baseUrl: string,
@@ -139,7 +193,10 @@ export async function flushOfflineQueue(
 
   for (const entry of entries) {
     if (entry.retryCount >= MAX_RETRIES_PER_ITEM) {
-      remaining.push(entry)
+      recordFailure(
+        entry,
+        `Stopped retrying after ${MAX_RETRIES_PER_ITEM} attempts.`,
+      )
       failedCount += 1
       continue
     }
@@ -152,14 +209,26 @@ export async function flushOfflineQueue(
       })
 
       if (isNonRetryable(response.status)) {
+        recordFailure(
+          entry,
+          `Replay rejected with ${response.status}. The action is no longer valid.`,
+        )
         failedCount += 1
         continue
       }
 
       if (!response.ok) {
         entry.retryCount += 1
-        remaining.push(entry)
         failedCount += 1
+
+        if (entry.retryCount >= MAX_RETRIES_PER_ITEM) {
+          recordFailure(
+            entry,
+            `Stopped retrying after ${MAX_RETRIES_PER_ITEM} attempts.`,
+          )
+        } else {
+          remaining.push(entry)
+        }
 
         const delay = Math.min(
           BASE_BACKOFF_MS * Math.pow(2, entry.retryCount - 1) +
@@ -185,8 +254,16 @@ export async function flushOfflineQueue(
       })
     } catch {
       entry.retryCount += 1
-      remaining.push(entry)
       failedCount += 1
+
+      if (entry.retryCount >= MAX_RETRIES_PER_ITEM) {
+        recordFailure(
+          entry,
+          `Stopped retrying after ${MAX_RETRIES_PER_ITEM} attempts due to repeated network errors.`,
+        )
+      } else {
+        remaining.push(entry)
+      }
 
       const delay = Math.min(
         BASE_BACKOFF_MS * Math.pow(2, entry.retryCount - 1) +

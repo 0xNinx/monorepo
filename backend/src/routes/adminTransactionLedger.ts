@@ -88,7 +88,7 @@ async function queryLedger(q: LedgerQuery) {
       tl.user_id, u.email AS actor_email,
       tl.created_at, tl.updated_at
     FROM transaction_ledger tl
-    LEFT JOIN users u ON u.id = tl.user_id
+    LEFT JOIN users u ON u.id = tl.user_id AND u.deleted_at IS NULL
     ${where}
     ORDER BY ${col} ${dir}, tl.id ${dir}
     LIMIT $${params.length + 1}

@@ -169,7 +169,7 @@ class PostgresPropertyPhotoStore implements PropertyPhotoStorePort {
     let orderIndex = input.orderIndex ?? 0
     if (input.orderIndex === undefined) {
       const { rows } = await pool.query(
-        'SELECT COALESCE(MAX(order_index), -1) + 1 as next_order FROM property_photos WHERE property_id = $1',
+        'SELECT COALESCE(MAX(order_index), -1) + 1 as next_order FROM property_photos WHERE property_id = $1 AND deleted_at IS NULL',
         [input.propertyId]
       )
       orderIndex = Number(rows[0].next_order)
@@ -201,7 +201,7 @@ class PostgresPropertyPhotoStore implements PropertyPhotoStorePort {
   async getById(id: string): Promise<PropertyPhoto | null> {
     const pool = await this.pool()
     const { rows } = await pool.query(
-      'SELECT * FROM property_photos WHERE id = $1',
+      'SELECT * FROM property_photos WHERE id = $1 AND deleted_at IS NULL',
       [id],
     )
 
@@ -211,7 +211,7 @@ class PostgresPropertyPhotoStore implements PropertyPhotoStorePort {
 
   async list(filters: PhotoFilters = {}): Promise<PropertyPhoto[]> {
     const pool = await this.pool()
-    const where: string[] = []
+    const where: string[] = ['deleted_at IS NULL']
     const values: unknown[] = []
 
     if (filters.propertyId) {
@@ -270,7 +270,7 @@ class PostgresPropertyPhotoStore implements PropertyPhotoStorePort {
   async delete(id: string): Promise<boolean> {
     const pool = await this.pool()
     const { rowCount } = await pool.query(
-      'DELETE FROM property_photos WHERE id = $1',
+      'UPDATE property_photos SET deleted_at = NOW() WHERE id = $1 AND deleted_at IS NULL',
       [id],
     )
     return rowCount > 0
@@ -327,7 +327,7 @@ class PostgresPropertyPhotoStore implements PropertyPhotoStorePort {
       
       // Unset featured for all photos in the property
       await client.query(
-        'UPDATE property_photos SET is_featured = FALSE, updated_at = NOW() WHERE property_id = $1',
+        'UPDATE property_photos SET is_featured = FALSE, updated_at = NOW() WHERE property_id = $1 AND deleted_at IS NULL',
         [propertyId]
       )
       
