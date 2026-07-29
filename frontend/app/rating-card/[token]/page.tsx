@@ -293,20 +293,25 @@ function SuccessPage({ card }: { card: PublicRatingCard }) {
 
 export default function SharedRatingCardPage() {
   const params = useParams();
-  const token = params.token as string;
-  const [state, setState] = useState<PageState>({ status: "loading" });
+  const token = params.token as string | undefined;
+
+  // derive initial state from token to avoid synchronous setState inside the effect
+  const [state, setState] = useState<PageState>(() =>
+    token ? { status: "loading" } : { status: "expired" }
+  );
 
   useEffect(() => {
-    if (!token) {
-      setState({ status: "expired" });
-      return;
-    }
+    if (!token) return; // nothing to do when token is missing
+
+    let mounted = true;
 
     getSharedRatingCard(token)
       .then((res) => {
+        if (!mounted) return;
         setState({ status: "success", card: res.data });
       })
       .catch((err: unknown) => {
+        if (!mounted) return;
         if (err instanceof ApiError) {
           if (err.status === 429) {
             setState({ status: "rate-limited" });
@@ -319,6 +324,10 @@ export default function SharedRatingCardPage() {
         }
         setState({ status: "expired" });
       });
+
+    return () => {
+      mounted = false;
+    };
   }, [token]);
 
   if (state.status === "loading") return <LoadingSkeleton />;
