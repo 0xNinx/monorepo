@@ -53,7 +53,7 @@ describe('PhotoGallery component', () => {
   it('shows empty state when no photos', () => {
     render(<PhotoGallery propertyId="prop-123" />);
     expect(screen.getByText(/no photos yet/i)).toBeInTheDocument();
-    const uploadButton = screen.getByRole('button', { name /upload your first photo/i });
+    const uploadButton = screen.getByRole('button', { name: /upload your first photo/i });
     expect(uploadButton).toBeInTheDocument();
   });
 
