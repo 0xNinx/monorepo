@@ -1775,7 +1775,7 @@ mod tests {
     #[test]
     fn getters_work_while_paused() {
         let env = Env::default();
-        let (admin, _submitter, client) = setup(&env);
+        let (admin, submitter, client) = setup(&env);
         let actor = Address::generate(&env);
 
         seed_balance(&client, &admin, &actor, 10_000);
@@ -1807,7 +1807,7 @@ mod tests {
     #[test]
     fn configurable_tiers_override_defaults() {
         let env = Env::default();
-        let (admin, _submitter, client) = setup(&env);
+        let (admin, submitter, client) = setup(&env);
         let actor = Address::generate(&env);
 
         seed_balance(&client, &admin, &actor, 100_000);
@@ -1835,7 +1835,7 @@ mod tests {
     #[test]
     fn max_slash_bps_caps_penalty() {
         let env = Env::default();
-        let (admin, _submitter, client) = setup(&env);
+        let (admin, submitter, client) = setup(&env);
         let actor = Address::generate(&env);
 
         seed_balance(&client, &admin, &actor, 100_000);
@@ -1863,7 +1863,7 @@ mod tests {
     #[test]
     fn tier_mapping_downtime_vs_double_sign() {
         let env = Env::default();
-        let (admin, _submitter, client) = setup(&env);
+        let (admin, submitter, client) = setup(&env);
 
         let actor_a = Address::generate(&env);
         let actor_b = Address::generate(&env);
