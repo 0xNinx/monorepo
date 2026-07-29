@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {
   Building2,
@@ -49,6 +49,119 @@ interface DocWithContent extends TenantLeaseDocument {
   };
 }
 
+interface DocPreviewModalProps {
+  doc: DocWithContent;
+  modalRef: React.RefObject<HTMLDivElement | null>;
+  onClose: () => void;
+}
+
+function DocPreviewModal({ doc, modalRef, onClose }: DocPreviewModalProps) {
+  const titleId = "doc-preview-title";
+
+  useEffect(() => {
+    const el = modalRef.current;
+    if (!el) return;
+
+    el.focus();
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        onClose();
+        return;
+      }
+      if (e.key !== "Tab") return;
+      const focusable = el.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      );
+      if (focusable.length === 0) { e.preventDefault(); return; }
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [modalRef, onClose]);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div
+        ref={modalRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        tabIndex={-1}
+        className="max-h-[90vh] max-w-2xl w-full overflow-y-auto border-3 border-foreground bg-card shadow-[8px_8px_0px_0px_rgba(26,26,26,1)] focus:outline-none"
+      >
+        <div className="sticky top-0 border-b-3 border-foreground bg-card px-6 py-4 flex items-center justify-between">
+          <h2 id={titleId} className="text-xl font-bold">
+            {doc.name}
+          </h2>
+          <button
+            onClick={onClose}
+            aria-label="Close document preview"
+            className="flex h-8 w-8 items-center justify-center border-2 border-foreground bg-muted hover:bg-primary transition-all focus:outline-none focus:ring-2 focus:ring-ring"
+          >
+            <X className="h-5 w-5" aria-hidden="true" />
+          </button>
+        </div>
+
+        <div className="p-6 space-y-6">
+          <div className="flex flex-wrap gap-4 text-sm font-bold border-b-2 border-dashed border-foreground pb-4">
+            <div>
+              <p className="text-xs text-muted-foreground">Date</p>
+              <p>{new Date(doc.date).toLocaleDateString()}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Size</p>
+              <p>{doc.size}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Status</p>
+              <span className="capitalize inline-flex items-center gap-1 border-2 border-foreground px-2 py-1 bg-primary">
+                {doc.status}
+              </span>
+            </div>
+          </div>
+
+          <div className="space-y-6">
+            <p className="text-muted-foreground">
+              Document preview not available. Please download to view full
+              content.
+            </p>
+          </div>
+
+          <div className="border-t-3 border-foreground pt-4 flex gap-3">
+            <Button
+              className="flex-1 border-2 border-foreground bg-primary py-3 font-bold shadow-[3px_3px_0px_0px_rgba(26,26,26,1)] transition-all hover:translate-x-px hover:translate-y-px hover:shadow-[2px_2px_0px_0px_rgba(26,26,26,1)]"
+              onClick={() => { if (doc.url) window.open(doc.url, "_blank"); }}
+            >
+              <Download className="mr-2 h-4 w-4" aria-hidden="true" />
+              Download PDF
+            </Button>
+            <Button
+              onClick={onClose}
+              className="flex-1 border-2 border-foreground bg-transparent font-bold hover:bg-muted"
+            >
+              Close
+            </Button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function TenantLeasePage() {
   const [leaseDetails, setLeaseDetails] = useState<TenantLeaseDetails | null>(
     null,
@@ -75,6 +188,8 @@ export default function TenantLeasePage() {
 
   const [selectedDocument, setSelectedDocument] =
     useState<DocWithContent | null>(null);
+  const docModalRef = useRef<HTMLDivElement>(null);
+  const docModalTriggerRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     getTenantCurrentLease()
@@ -483,7 +598,11 @@ export default function TenantLeasePage() {
                       <button
                         type="button"
                         className="flex flex-1 items-center gap-4 text-left"
-                        onClick={() => setSelectedDocument(doc)}
+                        onClick={(e) => {
+                          docModalTriggerRef.current = e.currentTarget;
+                          setSelectedDocument(doc);
+                        }}
+                        aria-label={`View details for ${doc.name}`}
                       >
                         <div className="flex h-10 w-10 items-center justify-center border-2 border-foreground bg-muted shrink-0">
                           <FileText className="h-5 w-5" />
@@ -513,73 +632,14 @@ export default function TenantLeasePage() {
               </Card>
 
               {selectedDocument && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-                  <div className="max-h-[90vh] max-w-2xl w-full overflow-y-auto border-3 border-foreground bg-card shadow-[8px_8px_0px_0px_rgba(26,26,26,1)]">
-                    <div className="sticky top-0 border-b-3 border-foreground bg-card px-6 py-4 flex items-center justify-between">
-                      <h2 className="text-xl font-bold">
-                        {selectedDocument.name}
-                      </h2>
-                      <button
-                        onClick={() => setSelectedDocument(null)}
-                        className="flex h-8 w-8 items-center justify-center border-2 border-foreground bg-muted hover:bg-primary transition-all"
-                      >
-                        <X className="h-5 w-5" />
-                      </button>
-                    </div>
-
-                    <div className="p-6 space-y-6">
-                      <div className="flex flex-wrap gap-4 text-sm font-bold border-b-2 border-dashed border-foreground pb-4">
-                        <div>
-                          <p className="text-xs text-muted-foreground">Date</p>
-                          <p>
-                            {new Date(
-                              selectedDocument.date,
-                            ).toLocaleDateString()}
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-xs text-muted-foreground">Size</p>
-                          <p>{selectedDocument.size}</p>
-                        </div>
-                        <div>
-                          <p className="text-xs text-muted-foreground">
-                            Status
-                          </p>
-                          <span className="capitalize inline-flex items-center gap-1 border-2 border-foreground px-2 py-1 bg-primary">
-                            {selectedDocument.status}
-                          </span>
-                        </div>
-                      </div>
-
-                      <div className="space-y-6">
-                        <p className="text-muted-foreground">
-                          Document preview not available. Please download to
-                          view full content.
-                        </p>
-                      </div>
-
-                      <div className="border-t-3 border-foreground pt-4 flex gap-3">
-                        <Button
-                          className="flex-1 border-2 border-foreground bg-primary py-3 font-bold shadow-[3px_3px_0px_0px_rgba(26,26,26,1)] transition-all hover:translate-x-px hover:translate-y-px hover:shadow-[2px_2px_0px_0px_rgba(26,26,26,1)]"
-                          onClick={() => {
-                            if (selectedDocument.url) {
-                              window.open(selectedDocument.url, "_blank");
-                            }
-                          }}
-                        >
-                          <Download className="mr-2 h-4 w-4" />
-                          Download PDF
-                        </Button>
-                        <Button
-                          onClick={() => setSelectedDocument(null)}
-                          className="flex-1 border-2 border-foreground bg-transparent font-bold hover:bg-muted"
-                        >
-                          Close
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
+                <DocPreviewModal
+                  doc={selectedDocument}
+                  modalRef={docModalRef}
+                  onClose={() => {
+                    setSelectedDocument(null);
+                    docModalTriggerRef.current?.focus();
+                  }}
+                />
               )}
             </div>
 
