@@ -6,6 +6,7 @@ frontend/.next
 frontend/out
 frontend/.env
 frontend/.env.*
+frontend/coverage
 
 # Backend
 backend/dist
