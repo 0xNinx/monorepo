@@ -17,6 +17,7 @@ import {
   Plus,
   Menu,
   X,
+  Heart,
 } from "lucide-react";
 
 type Role = "tenant" | "landlord" | "inspector" | "whistleblower";
@@ -56,6 +57,11 @@ const NAV_ITEMS: Record<Role, NavItem[]> = {
       icon: ShieldCheck,
     },
     { href: "/properties", label: "Browse Properties", icon: Building2 },
+    {
+      href: "/properties/saved",
+      label: "Saved Properties",
+      icon: Heart,
+    },
     {
       href: "/dashboard/tenant/rate-whistleblower",
       label: "Rate Whistleblower",

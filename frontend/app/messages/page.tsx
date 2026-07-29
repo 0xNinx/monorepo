@@ -132,6 +132,8 @@ export default function MessagesPage() {
   const [isLoadingMoreMessages, setIsLoadingMoreMessages] = useState(false);
   const [conversationsError, setConversationsError] = useState<string | null>(null);
   const [messagesError, setMessagesError] = useState<string | null>(null);
+  const selectedConversationIdRef = useRef(selectedConversationId);
+  selectedConversationIdRef.current = selectedConversationId;
   const [isSending, setIsSending] = useState(false);
   const [uploadState, setUploadState] = useState<UploadState | null>(null);
   const [composerError, setComposerError] = useState<string | null>(null);
@@ -436,7 +438,11 @@ export default function MessagesPage() {
     };
 
     setMessages(prev => [...prev, optimisticMsg]);
-    setNewMessage("");
+    setDrafts(prev => {
+      const convId = selectedConversationIdRef.current;
+      if (convId === null) return prev;
+      return { ...prev, [convId]: "" };
+    });
     setUploadState(null);
     setComposerError(null);
     setIsSending(true);

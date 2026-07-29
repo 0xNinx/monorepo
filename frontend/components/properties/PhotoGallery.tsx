@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState, useCallback, useRef, useEffect } from 'react'
+import Image from 'next/image'
 import { Image as ImageIcon, Star, Trash2, GripVertical, X, Upload, ChevronLeft, ChevronRight, Info } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -31,6 +32,7 @@ interface PhotoGalleryProps {
 }
 
 export function PhotoGallery({ propertyId, initialPhotos = [], onPhotosChange, readOnly = false }: PhotoGalleryProps) {
+  const isLocalUrl = (url: string) => url.startsWith('data:') || url.startsWith('blob:');
   const [photos, setPhotos] = useState<PropertyPhoto[]>(initialPhotos)
   const [selectedPhoto, setSelectedPhoto] = useState<PropertyPhoto | null>(null)
   const [lightboxOpen, setLightboxOpen] = useState(false)
@@ -412,11 +414,22 @@ function PhotoCard({
     >
       {/* Image */}
       <div className="aspect-square relative">
-        <img
-          src={photo.url}
-          alt={photo.fileName || 'Property photo'}
-          className="w-full h-full object-cover"
-        />
+        {isLocalUrl(photo.url) ? (
+          // eslint-disable-next-line @next/next/no-img-element -- blob/data URLs are incompatible with next/image
+          <img
+            src={photo.url}
+            alt={photo.fileName || 'Property photo'}
+            className="w-full h-full object-cover"
+          />
+        ) : (
+          <Image
+            src={photo.url}
+            alt={photo.fileName || 'Property photo'}
+            fill
+            className="object-cover"
+            sizes="(max-width: 768px) 50vw, 25vw"
+          />
+        )}
         
         {/* Featured Badge */}
         {isFeatured && (
@@ -530,12 +543,24 @@ function Lightbox({ isOpen, photo, photos, onClose, onNext, onPrev }: LightboxPr
       )}
 
       {/* Image */}
-      <div className="max-w-4xl max-h-[80vh] p-4">
-        <img
-          src={photo.url}
-          alt={photo.fileName || 'Property photo'}
-          className="max-w-full max-h-full object-contain"
-        />
+      <div className="max-w-4xl max-h-[80vh] p-4 relative">
+        {isLocalUrl(photo.url) ? (
+          // eslint-disable-next-line @next/next/no-img-element -- blob/data URLs are incompatible with next/image
+          <img
+            src={photo.url}
+            alt={photo.fileName || 'Property photo'}
+            className="max-w-full max-h-full object-contain"
+          />
+        ) : (
+          <Image
+            src={photo.url}
+            alt={photo.fileName || 'Property photo'}
+            width={1200}
+            height={800}
+            className="max-w-full max-h-full object-contain"
+            unoptimized
+          />
+        )}
       </div>
 
       {/* Photo Info */}
