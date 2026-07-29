@@ -99,12 +99,12 @@ export async function uploadPropertyPhotos(
   files: File[],
 ): Promise<UploadPropertyPhotosResponse> {
   const formData = new FormData();
-  files.forEach((file) => formData.append('photos', file));
+  files.forEach((file) => formData.append("photos", file));
 
   return apiFetch<UploadPropertyPhotosResponse>(
     `/properties/${propertyId}/photos`,
     {
-      method: 'POST',
+      method: "POST",
       body: formData,
     },
   );
@@ -115,7 +115,7 @@ export async function deletePropertyPhoto(
   photoId: string,
 ): Promise<void> {
   return apiFetch<void>(`/properties/${propertyId}/photos/${photoId}`, {
-    method: 'DELETE',
+    method: "DELETE",
   });
 }
 
@@ -127,7 +127,7 @@ export async function reorderPropertyPhotos(
   return apiFetch<UploadPropertyPhotosResponse>(
     `/properties/${propertyId}/photos/order`,
     {
-      method: 'PATCH',
+      method: "PATCH",
       body: JSON.stringify({ photoId, newOrderIndex }),
     },
   );
@@ -140,7 +140,7 @@ export async function setPropertyPhotoPrimary(
   return apiFetch<UploadedPropertyPhoto>(
     `/properties/${propertyId}/photos/${photoId}/primary`,
     {
-      method: 'PATCH',
+      method: "PATCH",
     },
   );
 }
@@ -212,7 +212,9 @@ export async function getPhotoPresign(
 export async function uploadPropertyPhotosBatch(
   propertyId: string,
   files: File[],
-): Promise<{ results: Array<{ success: boolean; photo: { url: string; id: string } }> }> {
+): Promise<{
+  results: Array<{ success: boolean; photo: { url: string; id: string } }>;
+}> {
   const formData = new FormData();
   files.forEach((file) => formData.append("photos", file));
 
@@ -302,4 +304,15 @@ export function computeMarginPreview(
     belowRecommended: outrightMargin < MIN_OUTRIGHT_MARGIN_PERCENT,
     orderInvalid: outright > installmentBase,
   };
+}
+
+export interface LandlordDashboardStats {
+  totalProperties: number;
+  activeListings: number;
+  totalViews: number;
+  monthlyRevenueNgn: number;
+}
+
+export async function getLandlordDashboardStats(): Promise<LandlordDashboardStats> {
+  return apiGet<LandlordDashboardStats>("/api/landlord/dashboard/stats");
 }

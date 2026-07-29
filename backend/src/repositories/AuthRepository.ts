@@ -74,7 +74,7 @@ export class PostgresUserRepository {
     const pool = await this.pool()
     const { rows } = await pool.query(
       `SELECT id, email, name, role, wallet_address, created_at, tier, plan_quota, display_currency 
-       FROM users WHERE email = $1`,
+       FROM users WHERE email = $1 AND deleted_at IS NULL`,
       [email.toLowerCase()]
     )
 
@@ -106,7 +106,7 @@ export class PostgresUserRepository {
     const pool = await this.pool()
     const { rows } = await pool.query(
       `SELECT id, email, name, role, wallet_address, created_at, tier, plan_quota, display_currency 
-       FROM users WHERE id = $1`,
+       FROM users WHERE id = $1 AND deleted_at IS NULL`,
       [id]
     )
 
@@ -164,7 +164,7 @@ export class PostgresUserRepository {
     const pool = await this.pool()
     const { rows } = await pool.query(
       `UPDATE users SET display_currency = $1, updated_at = NOW()
-       WHERE email = $2
+       WHERE email = $2 AND deleted_at IS NULL
        RETURNING id, email, name, role, wallet_address, created_at, tier, plan_quota, display_currency`,
       [displayCurrency, email.toLowerCase()],
     )
@@ -183,8 +183,8 @@ export class PostgresUserRepository {
       planQuota: row.plan_quota,
       displayCurrency: row.display_currency,
     }
-    await userCache.delete(`email:${email.toLowerCase()}`)
-    await userCache.delete(`id:${user.id}`)
+    await userCache.invalidate(`email:${email.toLowerCase()}`)
+    await userCache.invalidate(`id:${user.id}`)
     return user
   }
 
@@ -192,7 +192,7 @@ export class PostgresUserRepository {
     const pool = await this.pool()
     const { rows } = await pool.query(
       `SELECT id, email, name, role, wallet_address, created_at, tier, plan_quota, display_currency 
-       FROM users WHERE wallet_address = $1`,
+       FROM users WHERE wallet_address = $1 AND deleted_at IS NULL`,
       [address.toLowerCase()]
     )
 
@@ -243,7 +243,7 @@ export class PostgresUserRepository {
   async updateName(userId: string, name: string): Promise<void> {
     const pool = await this.pool()
     await pool.query(
-      `UPDATE users SET name = $1, updated_at = NOW() WHERE id = $2`,
+      `UPDATE users SET name = $1, updated_at = NOW() WHERE id = $2 AND deleted_at IS NULL`,
       [name, userId]
     )
     // Invalidate
@@ -257,7 +257,7 @@ export class PostgresUserRepository {
   async getLandlordProfile(userId: string): Promise<LandlordProfile | null> {
     const pool = await this.pool()
     const { rows } = await pool.query(
-      `SELECT * FROM landlord_profiles WHERE user_id = $1`,
+      `SELECT * FROM landlord_profiles WHERE user_id = $1 AND deleted_at IS NULL`,
       [userId]
     )
 
@@ -372,6 +372,8 @@ export class PostgresSessionRepository {
        FROM sessions s
        JOIN users u ON s.user_id = u.id
        WHERE s.token_hash = $1 
+          AND s.deleted_at IS NULL
+          AND u.deleted_at IS NULL 
          AND s.expires_at > NOW() 
          AND s.revoked_at IS NULL`,
       [tokenHash]
@@ -395,7 +397,8 @@ export class PostgresSessionRepository {
     const { rows } = await pool.query(
       `SELECT expires_at, revoked_at
        FROM sessions
-       WHERE token_hash = $1`,
+       WHERE token_hash = $1
+         AND deleted_at IS NULL`,
       [tokenHash],
     )
 
@@ -464,7 +467,7 @@ export class PostgresOtpChallengeRepository {
     const { rows } = await pool.query(
       `SELECT email, otp_hash, salt, expires_at, attempts 
        FROM otp_challenges 
-       WHERE email = $1 AND expires_at > NOW()`,
+       WHERE email = $1 AND expires_at > NOW() AND deleted_at IS NULL`,
       [email.toLowerCase()]
     )
 
@@ -484,7 +487,7 @@ export class PostgresOtpChallengeRepository {
     const pool = await this.pool()
 
     await pool.query(
-      `UPDATE otp_challenges SET attempts = $1 WHERE email = $2`,
+      `UPDATE otp_challenges SET attempts = $1 WHERE email = $2 AND deleted_at IS NULL`,
       [attempts, email.toLowerCase()]
     )
   }
@@ -540,7 +543,7 @@ export class PostgresWalletChallengeRepository {
     const { rows } = await pool.query(
       `SELECT address, nonce, challenge_xdr, expires_at, attempts 
        FROM wallet_challenges 
-       WHERE address = $1 AND expires_at > NOW() AND used_at IS NULL`,
+       WHERE address = $1 AND expires_at > NOW() AND used_at IS NULL AND deleted_at IS NULL`,
       [address.toLowerCase()]
     )
 
@@ -560,7 +563,7 @@ export class PostgresWalletChallengeRepository {
     const pool = await this.pool()
 
     await pool.query(
-      `UPDATE wallet_challenges SET attempts = $1 WHERE address = $2`,
+      `UPDATE wallet_challenges SET attempts = $1 WHERE address = $2 AND deleted_at IS NULL`,
       [attempts, address.toLowerCase()]
     )
   }
@@ -569,7 +572,7 @@ export class PostgresWalletChallengeRepository {
     const pool = await this.pool()
 
     await pool.query(
-      `UPDATE wallet_challenges SET used_at = NOW() WHERE address = $1`,
+      `UPDATE wallet_challenges SET used_at = NOW() WHERE address = $1 AND deleted_at IS NULL`,
       [address.toLowerCase()]
     )
   }

@@ -90,6 +90,7 @@ function mapRow(row: Record<string, unknown>): OutboxItem {
     submittedLedger: row.submitted_ledger != null ? Number(row.submitted_ledger) : undefined,
     confirmationDepth: row.confirmation_depth != null ? Number(row.confirmation_depth) : 3,
     claimedBy: (row.claimed_by as string) ?? undefined,
+    requestId: (row.request_id as string) ?? undefined,
     createdAt: new Date(row.created_at as string),
     updatedAt: new Date(row.updated_at as string),
   }
@@ -129,6 +130,7 @@ class InMemoryOutboxStore implements IOutboxStore {
       processedAt: null,
       retryCount: 0,
       confirmationDepth: 3,
+      requestId: input.requestId,
       createdAt: now,
       updatedAt: now,
     }
@@ -306,14 +308,15 @@ export class PostgresOutboxStore implements IOutboxStore {
     const { rows } = await pool.query(
       `INSERT INTO outbox_items (
          id, tx_id, tx_type, canonical_external_ref_v1,
-         aggregate_id, aggregate_type, event_type, payload
-       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+         aggregate_id, aggregate_type, event_type, payload, request_id
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
        ON CONFLICT (canonical_external_ref_v1) DO NOTHING
        RETURNING *`,
       [
         id, txId, input.txType, canonicalExternalRefV1,
         input.aggregateId ?? '', input.aggregateType ?? '', input.eventType ?? '',
         JSON.stringify(input.payload),
+        input.requestId ?? null,
       ],
     )
 

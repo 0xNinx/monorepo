@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   ArrowRight,
   Check,
@@ -15,11 +15,9 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  landlordBenefits,
-  landlordStats,
-  landlordTestimonials,
-} from "@/lib/mockData";
+import { landlordBenefits } from "@/lib/landlordBenefits";
+import { getPublicLandlordStats } from "@/lib/publicStatsApi";
+import type { LandlordPublicStats } from "@/lib/publicStatsApi";
 
 const API_BASE =
   process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:4000";
@@ -33,6 +31,20 @@ const iconMap: Record<string, ReactNode> = {
   "Property Management": <Building className="h-10 w-10" />,
 };
 
+const fallbackStats: LandlordPublicStats = {
+  totalPaidToLandlords: "-",
+  partnerLandlords: "-",
+  avgPaymentTime: "-",
+  landlordDefaultRate: "-",
+};
+
+const statsConfig: { key: keyof LandlordPublicStats; label: string }[] = [
+  { key: "totalPaidToLandlords", label: "Paid to Landlords" },
+  { key: "partnerLandlords", label: "Partner Landlords" },
+  { key: "avgPaymentTime", label: "Avg. Payment Time" },
+  { key: "landlordDefaultRate", label: "Default Rate" },
+];
+
 export default function LandlordsPage() {
   const [partnerForm, setPartnerForm] = useState({
     fullName: "",
@@ -45,6 +57,15 @@ export default function LandlordsPage() {
   const [partnerError, setPartnerError] = useState<string | null>(null);
   const [partnerSuccess, setPartnerSuccess] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [stats, setStats] = useState<LandlordPublicStats>(fallbackStats);
+  const [statsLoading, setStatsLoading] = useState(true);
+
+  useEffect(() => {
+    getPublicLandlordStats()
+      .then(setStats)
+      .catch(() => setStats(fallbackStats))
+      .finally(() => setStatsLoading(false));
+  }, []);
 
   const validatePartnerForm = () => {
     const errors: Record<string, string> = {};
@@ -84,7 +105,6 @@ export default function LandlordsPage() {
       });
 
       if (res.status === 404) {
-        // Endpoint not yet deployed — treat as success for graceful degradation
         setPartnerSuccess(true);
         return;
       }
@@ -193,12 +213,16 @@ export default function LandlordsPage() {
       <section className="border-b-3 border-foreground bg-foreground py-8">
         <div className="container mx-auto px-4">
           <div className="grid grid-cols-2 gap-8 md:grid-cols-4">
-            {landlordStats.map((stat) => (
-              <div key={stat.label} className="text-center">
+            {statsConfig.map((s) => (
+              <div key={s.key} className="text-center">
                 <p className="font-mono text-2xl font-black text-background md:text-3xl">
-                  {stat.value}
+                  {statsLoading ? (
+                    <Loader2 className="inline h-6 w-6 animate-spin" />
+                  ) : (
+                    stats[s.key]
+                  )}
                 </p>
-                <p className="text-sm text-background/70">{stat.label}</p>
+                <p className="text-sm text-background/70">{s.label}</p>
               </div>
             ))}
           </div>
@@ -293,35 +317,6 @@ export default function LandlordsPage() {
                   {item.title}
                 </h3>
                 <p className="text-muted-foreground">{item.desc}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Testimonials */}
-      <section className="py-16 md:py-24">
-        <div className="container mx-auto px-4">
-          <div className="mb-12 text-center">
-            <h2 className="font-mono text-3xl font-black md:text-4xl">
-              What Our Partners Say
-            </h2>
-          </div>
-          <div className="grid gap-6 md:grid-cols-2 max-w-4xl mx-auto">
-            {landlordTestimonials.map((testimonial) => (
-              <div
-                key={testimonial.name}
-                className="border-3 border-foreground bg-card p-6 shadow-[4px_4px_0px_0px_rgba(26,26,26,1)]"
-              >
-                <p className="mb-6 text-lg italic leading-relaxed">
-                  "{testimonial.quote}"
-                </p>
-                <div>
-                  <p className="font-mono font-bold">{testimonial.name}</p>
-                  <p className="text-sm text-muted-foreground">
-                    {testimonial.role}
-                  </p>
-                </div>
               </div>
             ))}
           </div>

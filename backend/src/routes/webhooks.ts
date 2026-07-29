@@ -32,6 +32,17 @@ import {
   webhookSubscriptionStore,
   webhookDeliveryStore
 } from "../models/webhookSubscription.js";
+import { getWebhookReplayStore } from "../webhookReplay/store.js";
+import { WebhookProcessingStatus } from "../webhookReplay/types.js";
+
+function extractWebhookHeaders(req: Request): Record<string, string> {
+  const headers: Record<string, string> = {};
+  for (const [key, value] of Object.entries(req.headers)) {
+    if (typeof value === "string") headers[key] = value;
+    else if (Array.isArray(value)) headers[key] = value.join(",");
+  }
+  return headers;
+}
 
 
 export function createWebhooksRouter(ngnWalletService: NgnWalletService) {
@@ -50,7 +61,8 @@ export function createWebhooksRouter(ngnWalletService: NgnWalletService) {
    * - failed: Marks deposit as failed (no wallet credit)
    * - reversed: Debits NGN wallet and marks deposit as reversed
    *
-   * Signature validation is enforced in production mode when WEBHOOK_SIGNATURE_ENABLED=true
+   * Signature validation is always enforced in production. In non-production,
+   * it can be enabled with WEBHOOK_SIGNATURE_ENABLED=true.
    */
   router.post(
     "/payments/:rail",
@@ -62,6 +74,8 @@ export function createWebhooksRouter(ngnWalletService: NgnWalletService) {
     },
     validate(paymentsWebhookSchema),
     async (req: Request, res: Response, next: NextFunction) => {
+      const replayStore = getWebhookReplayStore();
+      let replayWebhookEventId: string | null = null;
       try {
         const rail = String(req.params.rail);
 
@@ -73,6 +87,22 @@ export function createWebhooksRouter(ngnWalletService: NgnWalletService) {
         // Validate rail matches externalRefSource
         if (externalRefSource !== rail) {
           throw new AppError(ErrorCode.VALIDATION_ERROR, 400, "Rail mismatch");
+        }
+
+        const replayEvent = await replayStore.createEvent({
+          provider: rail,
+          eventType: `payments.${String(rawStatus ?? providerStatus ?? "unknown")}`,
+          externalId: parsed.providerEventId,
+          payload: req.body as Record<string, unknown>,
+          headers: extractWebhookHeaders(req),
+          processingStatus: WebhookProcessingStatus.PENDING,
+        });
+        replayWebhookEventId = replayEvent.id;
+        if (replayEvent.processingStatus === WebhookProcessingStatus.PROCESSED) {
+          recordKPI("webhookEventDeduped");
+          return res
+            .status(200)
+            .json({ success: true, deduped: true, providerEventId: parsed.providerEventId });
         }
 
         // Persisted idempotency on provider event id (after signature validation) — replays short-circuit here.
@@ -134,6 +164,10 @@ export function createWebhooksRouter(ngnWalletService: NgnWalletService) {
             providerStatus,
             requestId: req.requestId,
           });
+          await replayStore.updateEventStatus(
+            replayWebhookEventId!,
+            WebhookProcessingStatus.PROCESSED,
+          );
           return res.status(200).json({ success: true });
         }
 
@@ -171,6 +205,10 @@ export function createWebhooksRouter(ngnWalletService: NgnWalletService) {
             });
           }
 
+          await replayStore.updateEventStatus(
+            replayWebhookEventId!,
+            WebhookProcessingStatus.PROCESSED,
+          );
           return res.status(200).json({ success: true });
         }
 
@@ -287,8 +325,20 @@ export function createWebhooksRouter(ngnWalletService: NgnWalletService) {
           }
         }
 
+        await replayStore.updateEventStatus(
+          replayWebhookEventId!,
+          WebhookProcessingStatus.PROCESSED,
+        );
         res.status(200).json({ success: true });
       } catch (error) {
+        if (replayWebhookEventId) {
+          const message = error instanceof Error ? error.message : String(error);
+          await replayStore.updateEventStatus(
+            replayWebhookEventId,
+            WebhookProcessingStatus.FAILED,
+            message,
+          );
+        }
         next(error);
       }
     },
@@ -303,6 +353,8 @@ export function createWebhooksRouter(ngnWalletService: NgnWalletService) {
     "/reversals/:provider",
     validate(depositReversalWebhookSchema),
     async (req: Request, res: Response, next: NextFunction) => {
+      const replayStore = getWebhookReplayStore();
+      let replayWebhookEventId: string | null = null;
       try {
         const provider = String(req.params.provider);
 
@@ -315,6 +367,22 @@ export function createWebhooksRouter(ngnWalletService: NgnWalletService) {
           reversalRef,
           eventType,
         } = req.body;
+
+        const replayEvent = await replayStore.createEvent({
+          provider,
+          eventType: String(eventType),
+          externalId: String(reversalRef),
+          payload: req.body as Record<string, unknown>,
+          headers: extractWebhookHeaders(req),
+          processingStatus: WebhookProcessingStatus.PENDING,
+        });
+        replayWebhookEventId = replayEvent.id;
+        if (replayEvent.processingStatus === WebhookProcessingStatus.PROCESSED) {
+          recordKPI("webhookEventDeduped");
+          return res
+            .status(200)
+            .json({ success: true, deduped: true, providerEventId: reversalRef });
+        }
 
         if (bodyProvider !== provider) {
           throw new AppError(
@@ -367,9 +435,20 @@ export function createWebhooksRouter(ngnWalletService: NgnWalletService) {
           requestId: req.requestId,
         });
 
+        await replayStore.updateEventStatus(
+          replayWebhookEventId!,
+          WebhookProcessingStatus.PROCESSED,
+        );
         res.status(200).json({ success: true });
       } catch (error) {
         if (error instanceof AppError && error.code === ErrorCode.NOT_FOUND) {
+          if (replayWebhookEventId) {
+            await replayStore.updateEventStatus(
+              replayWebhookEventId,
+              WebhookProcessingStatus.FAILED,
+              error.message,
+            );
+          }
           // If deposit not found, still return 200 to prevent webhook retries
           logger.warn("Deposit not found for reversal webhook", {
             provider: req.params.provider,
@@ -379,6 +458,14 @@ export function createWebhooksRouter(ngnWalletService: NgnWalletService) {
           });
           res.status(200).json({ success: true, message: "Deposit not found" });
           return;
+        }
+        if (replayWebhookEventId) {
+          const message = error instanceof Error ? error.message : String(error);
+          await replayStore.updateEventStatus(
+            replayWebhookEventId,
+            WebhookProcessingStatus.FAILED,
+            message,
+          );
         }
         next(error);
       }

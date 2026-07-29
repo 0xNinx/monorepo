@@ -3,6 +3,33 @@ import { logger } from '../utils/logger.js'
 
 const RETENTION_PERIOD_YEARS = 7
 
+type PurgeTarget = {
+  table: string
+  keyColumn: string
+}
+
+const PURGE_TARGETS: PurgeTarget[] = [
+  { table: 'users', keyColumn: 'id' },
+  { table: 'sessions', keyColumn: 'id' },
+  { table: 'wallets', keyColumn: 'id' },
+  { table: 'linked_addresses', keyColumn: 'id' },
+  { table: 'landlord_profiles', keyColumn: 'id' },
+  { table: 'tenant_applications', keyColumn: 'id' },
+  { table: 'whistleblower_listings', keyColumn: 'id' },
+  { table: 'tenant_deals', keyColumn: 'id' },
+  { table: 'landlord_properties', keyColumn: 'id' },
+  { table: 'ngn_deposits', keyColumn: 'id' },
+  { table: 'conversions', keyColumn: 'id' },
+  { table: 'webhook_events', keyColumn: 'id' },
+  { table: 'webhook_replay_attempts', keyColumn: 'id' },
+  { table: 'otp_challenges', keyColumn: 'id' },
+  { table: 'wallet_challenges', keyColumn: 'id' },
+  { table: 'kyc_documents', keyColumn: 'id' },
+  { table: 'tenant_documents', keyColumn: 'id' },
+  { table: 'property_photos', keyColumn: 'id' },
+  { table: 'support_messages', keyColumn: 'id' },
+]
+
 export interface SoftDeleteResult {
   success: boolean
   userId?: string
@@ -41,6 +68,11 @@ export async function softDeleteUser(
       'UPDATE users SET deleted_at = $1 WHERE id = $2',
       [deletedAt, userId]
     )
+
+    await client.query(
+      'UPDATE sessions SET deleted_at = $1, revoked_at = NOW() WHERE user_id = $2',
+      [deletedAt, userId]
+    )
     
     // Soft delete associated records
     await client.query(
@@ -75,6 +107,26 @@ export async function softDeleteUser(
     
     await client.query(
       'UPDATE landlord_properties SET deleted_at = $1 WHERE landlord_id = $2',
+      [deletedAt, userId]
+    )
+
+    await client.query(
+      'UPDATE kyc_documents SET deleted_at = $1 WHERE user_id = $2',
+      [deletedAt, userId]
+    )
+
+    await client.query(
+      'UPDATE tenant_documents SET deleted_at = $1 WHERE user_id = $2',
+      [deletedAt, userId]
+    )
+
+    await client.query(
+      'UPDATE ngn_deposits SET deleted_at = $1 WHERE user_id = $2',
+      [deletedAt, userId]
+    )
+
+    await client.query(
+      'UPDATE conversions SET deleted_at = $1 WHERE user_id = $2',
       [deletedAt, userId]
     )
     
@@ -130,60 +182,46 @@ export async function purgeExpiredRecords(): Promise<PurgeResult[]> {
   const cutoffDate = new Date()
   cutoffDate.setFullYear(cutoffDate.getFullYear() - RETENTION_PERIOD_YEARS)
   
-  const tables = [
-    'users',
-    'sessions',
-    'wallets',
-    'linked_addresses',
-    'landlord_profiles',
-    'tenant_applications',
-    'whistleblower_listings',
-    'tenant_deals',
-    'landlord_properties',
-    'ngn_deposits',
-    'conversions',
-    'webhook_events',
-    'webhook_replay_attempts',
-    'otp_challenges',
-    'wallet_challenges',
-    'kyc_documents',
-    'tenant_documents',
-    'property_photos',
-    'support_messages',
-  ]
-  
   const client = await pool.connect()
   
   try {
     await client.query('BEGIN')
     
-    for (const table of tables) {
+    for (const target of PURGE_TARGETS) {
       try {
         const result = await client.query(
-          `DELETE FROM ${table} WHERE deleted_at < $1`,
-          [cutoffDate]
+          `DELETE FROM ${target.table} t
+           WHERE t.deleted_at < $1
+             AND NOT EXISTS (
+               SELECT 1
+               FROM data_retention_holds h
+               WHERE h.table_name = $2
+                 AND h.record_id = t.${target.keyColumn}::text
+                 AND h.released_at IS NULL
+             )`,
+          [cutoffDate, target.table]
         )
         
         const recordsDeleted = result.rowCount || 0
         
         if (recordsDeleted > 0) {
-          results.push({ table, recordsDeleted })
+          results.push({ table: target.table, recordsDeleted })
           
           // Log audit event for each table
           await client.query(
             `INSERT INTO audit_log (event_type, actor_type, actor_id, details)
              VALUES ('data_retention_purge', 'system', 'system', $1)`,
-            [JSON.stringify({ table, recordsDeleted, cutoffDate })]
+            [JSON.stringify({ table: target.table, recordsDeleted, cutoffDate })]
           )
           
           logger.info('Purged expired records', {
-            table,
+            table: target.table,
             recordsDeleted,
             cutoffDate,
           })
         }
       } catch (error) {
-        logger.error(`Failed to purge table ${table}`, {
+        logger.error(`Failed to purge table ${target.table}`, {
           error: error instanceof Error ? error.message : String(error),
         })
       }
@@ -224,42 +262,29 @@ export async function getPendingPurgeCount(): Promise<Record<string, number>> {
   const cutoffDate = new Date()
   cutoffDate.setFullYear(cutoffDate.getFullYear() - RETENTION_PERIOD_YEARS)
   
-  const tables = [
-    'users',
-    'sessions',
-    'wallets',
-    'linked_addresses',
-    'landlord_profiles',
-    'tenant_applications',
-    'whistleblower_listings',
-    'tenant_deals',
-    'landlord_properties',
-    'ngn_deposits',
-    'conversions',
-    'webhook_events',
-    'webhook_replay_attempts',
-    'otp_challenges',
-    'wallet_challenges',
-    'kyc_documents',
-    'tenant_documents',
-    'property_photos',
-    'support_messages',
-  ]
-  
   const counts: Record<string, number> = {}
   
-  for (const table of tables) {
+  for (const target of PURGE_TARGETS) {
     try {
       const result = await pool.query(
-        `SELECT COUNT(*) as count FROM ${table} WHERE deleted_at < $1`,
-        [cutoffDate]
+        `SELECT COUNT(*) as count
+         FROM ${target.table} t
+         WHERE t.deleted_at < $1
+           AND NOT EXISTS (
+             SELECT 1
+             FROM data_retention_holds h
+             WHERE h.table_name = $2
+               AND h.record_id = t.${target.keyColumn}::text
+               AND h.released_at IS NULL
+           )`,
+        [cutoffDate, target.table]
       )
-      counts[table] = parseInt(result.rows[0].count, 10)
+      counts[target.table] = parseInt(result.rows[0].count, 10)
     } catch (error) {
-      logger.error(`Failed to get pending purge count for ${table}`, {
+      logger.error(`Failed to get pending purge count for ${target.table}`, {
         error: error instanceof Error ? error.message : String(error),
       })
-      counts[table] = 0
+      counts[target.table] = 0
     }
   }
   

@@ -13,6 +13,12 @@ interface FormatMoneyOptions {
   locale?: string;
 }
 
+interface FormatDecimalOptions {
+  locale?: string;
+  minimumFractionDigits?: number;
+  maximumFractionDigits?: number;
+}
+
 const DEFAULT_LOCALE = "en-NG";
 
 export const CURRENCY_POLICIES: Record<SupportedCurrency, CurrencyPolicy> = {
@@ -93,6 +99,30 @@ export function formatCompactNgn(amount: number | string, locale = DEFAULT_LOCAL
 
 export function formatUsdc(amount: number | string, locale?: string): string {
   return formatMoney(amount, "USDC", { locale });
+}
+
+export function formatDecimal(
+  amount: number | string,
+  options: FormatDecimalOptions = {},
+): string {
+  const value = toFiniteNumber(amount);
+
+  return new Intl.NumberFormat(options.locale ?? DEFAULT_LOCALE, {
+    minimumFractionDigits: options.minimumFractionDigits ?? 2,
+    maximumFractionDigits: options.maximumFractionDigits ?? 2,
+  }).format(value);
+}
+
+export function formatConversionRate(
+  rate: number | string,
+  outputCurrency: SupportedCurrency,
+  locale?: string,
+): string {
+  return `${formatDecimal(rate, {
+    locale,
+    minimumFractionDigits: 4,
+    maximumFractionDigits: 6,
+  })} ${outputCurrency}`;
 }
 
 export function formatDual(

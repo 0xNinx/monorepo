@@ -113,7 +113,7 @@ export function createAdminRolesRouter(): Router {
         }
 
         // Verify user exists
-        const userCheck = await pool.query('SELECT id FROM users WHERE id = $1', [userId])
+        const userCheck = await pool.query('SELECT id FROM users WHERE id = $1 AND deleted_at IS NULL', [userId])
         if (userCheck.rowCount === 0) {
           throw new AppError(ErrorCode.NOT_FOUND, 404, 'User not found')
         }

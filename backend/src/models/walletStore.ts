@@ -136,7 +136,7 @@ export class PostgresWalletStore implements WalletStore {
   async getByUserId(userId: string): Promise<Wallet | null> {
     const pool = await this.pool()
     const { rows } = await pool.query(
-      `SELECT * FROM wallets WHERE user_id = $1`,
+      `SELECT * FROM wallets WHERE user_id = $1 AND deleted_at IS NULL`,
       [userId],
     )
     const row = rows[0]
@@ -146,7 +146,7 @@ export class PostgresWalletStore implements WalletStore {
   async getPublicAddress(userId: string): Promise<string> {
     const pool = await this.pool()
     const { rows } = await pool.query(
-      `SELECT public_key FROM wallets WHERE user_id = $1`,
+      `SELECT public_key FROM wallets WHERE user_id = $1 AND deleted_at IS NULL`,
       [userId],
     )
     const row = rows[0]
@@ -159,7 +159,7 @@ export class PostgresWalletStore implements WalletStore {
   async getEncryptedKey(userId: string): Promise<{ cipherText: string; keyId: string } | null> {
     const pool = await this.pool()
     const { rows } = await pool.query(
-      `SELECT encrypted_secret_key, key_id FROM wallets WHERE user_id = $1`,
+      `SELECT encrypted_secret_key, key_id FROM wallets WHERE user_id = $1 AND deleted_at IS NULL`,
       [userId],
     )
     const row = rows[0]
@@ -188,7 +188,7 @@ export class PostgresWalletStore implements WalletStore {
     const { rows } = await pool.query(
       `SELECT user_id
        FROM wallets
-       WHERE key_id = $1${cursorSql}
+       WHERE key_id = $1 AND deleted_at IS NULL${cursorSql}
        ORDER BY user_id ASC
        LIMIT $2`,
       values,

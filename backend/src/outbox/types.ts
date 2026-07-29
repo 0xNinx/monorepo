@@ -64,6 +64,9 @@ export interface OutboxItem {
   /** Worker instance UUID holding an advisory claim on this row. */
   claimedBy?: string
 
+  /** Correlation ID linking this item to the originating HTTP request. */
+  requestId?: string
+
   createdAt: Date
   updatedAt: Date
 }
@@ -74,10 +77,12 @@ export interface CreateOutboxItemInput {
   ref: string     // External payment reference ID
   payload: Record<string, unknown>
 
-
   aggregateId?: string
   aggregateType?: string
   eventType?: string
+
+  /** Correlation ID from the originating HTTP request. */
+  requestId?: string
 }
 
 

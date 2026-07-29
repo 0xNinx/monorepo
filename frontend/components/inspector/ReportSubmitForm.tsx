@@ -153,6 +153,7 @@ export function ReportSubmitForm({ jobId, propertyTitle, onSubmitted, onError }:
                   key={index}
                   className="relative aspect-square overflow-hidden rounded-lg border-2 border-foreground bg-muted"
                 >
+                  {/* eslint-disable-next-line @next/next/no-img-element -- blob URLs from URL.createObjectURL are incompatible with next/image */}
                   <img
                     src={URL.createObjectURL(photo)}
                     alt={`Photo ${index + 1}`}

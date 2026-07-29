@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { handleError, showSuccessToast } from "@/lib/toast";
 import { generateLedgerCsv, downloadCsv } from "@/lib/csvExport";
+import { formatConversionRate, formatNgn, formatUsdc } from "@/lib/currency";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -111,14 +112,6 @@ interface LedgerData {
   hasMore: boolean;
 }
 
-function formatNgn(amount: number) {
-  return new Intl.NumberFormat("en-NG", {
-    style: "currency",
-    currency: "NGN",
-    minimumFractionDigits: 0,
-  }).format(amount);
-}
-
 function humanizeEntryType(type: string) {
   const normalized = type.trim().replaceAll("_", " ");
   if (!normalized) return "Activity";
@@ -159,6 +152,13 @@ function getTypesFromFilterIds(filterIds: string[]): WalletLedgerType[] {
 function getFilterLabel(filterId: string): string {
   const group = FILTER_GROUPS.find((g) => g.id === filterId);
   return group?.label ?? filterId;
+}
+
+function formatDateTime(iso: string): string {
+  return new Intl.DateTimeFormat("en-NG", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(new Date(iso));
 }
 
 function WalletPageContent() {
@@ -564,7 +564,9 @@ function WalletPageContent() {
                       <>
                         {currency.code === "NGN"
                           ? formatNgn(currencyBalance.available)
-                          : `${currency.symbol}${currencyBalance.available.toFixed(2)}`}
+                          : currency.code === "USDC"
+                            ? formatUsdc(currencyBalance.available)
+                            : `${currency.symbol}${currencyBalance.available.toFixed(2)}`}
                       </>
                     )}
                   </CardTitle>
@@ -576,7 +578,11 @@ function WalletPageContent() {
                     </p>
                     {currencyBalance && currencyBalance.held > 0 && (
                       <Badge variant="outline" className="text-xs">
-                        Held: {currency.code === "NGN" ? formatNgn(currencyBalance.held) : `${currency.symbol}${currencyBalance.held.toFixed(2)}`}
+                        Held: {currency.code === "NGN"
+                          ? formatNgn(currencyBalance.held)
+                          : currency.code === "USDC"
+                            ? formatUsdc(currencyBalance.held)
+                            : `${currency.symbol}${currencyBalance.held.toFixed(2)}`}
                       </Badge>
                     )}
                   </div>
@@ -631,25 +637,43 @@ function WalletPageContent() {
                       {conversionQuote.type === "success" && (
                         <div className="space-y-2">
                           <div className="flex items-center justify-between text-sm">
-                            <span className="text-muted-foreground">You will receive</span>
+                            <span className="text-muted-foreground">Estimated converted amount</span>
                             <span className="font-mono font-bold">
-                              {selectedCurrency === "NGN" ? "$" : "₦"}
-                              {conversionQuote.data.estimatedToAmount.toFixed(2)}
+                              {selectedCurrency === "NGN"
+                                ? formatUsdc(conversionQuote.data.estimatedToAmount)
+                                : formatNgn(conversionQuote.data.estimatedToAmount)}
                             </span>
                           </div>
                           <div className="flex items-center justify-between text-xs text-muted-foreground">
                             <span>Rate</span>
-                            <span>1 {selectedCurrency} = {conversionQuote.data.rate.toFixed(4)} {selectedCurrency === "NGN" ? "USDC" : "NGN"}</span>
+                            <span>
+                              1 {selectedCurrency} = {formatConversionRate(
+                                conversionQuote.data.rate,
+                                selectedCurrency === "NGN" ? "USDC" : "NGN",
+                                "en-NG",
+                              )}
+                            </span>
                           </div>
                           <div className="flex items-center justify-between text-xs text-muted-foreground">
                             <span>Fees</span>
-                            <span>{selectedCurrency === "NGN" ? "₦" : "$"}{conversionQuote.data.fees.toFixed(2)}</span>
+                            <span>{selectedCurrency === "NGN"
+                              ? formatNgn(conversionQuote.data.fees)
+                              : formatUsdc(conversionQuote.data.fees)}</span>
+                          </div>
+                          <div className="flex items-center justify-between text-xs text-muted-foreground">
+                            <span>Rate valid until</span>
+                            <time dateTime={conversionQuote.data.expiresAt}>
+                              {formatDateTime(conversionQuote.data.expiresAt)}
+                            </time>
                           </div>
                           {conversionQuote.data.disclaimer && (
                             <p className="text-xs text-muted-foreground italic">
                               {conversionQuote.data.disclaimer}
                             </p>
                           )}
+                          <p className="text-xs text-muted-foreground">
+                            Settlement currency: {selectedCurrency}. This preview does not change the amount charged.
+                          </p>
                         </div>
                       )}
                     </div>

@@ -70,6 +70,7 @@ export function createPaymentsRouter(adapter: SorobanAdapter) {
             ...(fxRateNgnPerUsdc != null && { fxRateNgnPerUsdc }),
             ...(fxProvider != null && { fxProvider }),
           },
+          requestId: req.requestId,
         })
 
         logger.info('Outbox item created or retrieved', {
@@ -119,14 +120,14 @@ export function createPaymentsRouter(adapter: SorobanAdapter) {
             externalRef,
             amountNgn,
             fxRateNgnPerUsdc
-          }).catch(err => logger.error('Failed to enqueue payment.received webhook:', err))
+          }, { requestId: req.requestId }).catch(err => logger.error('Failed to enqueue payment.received webhook:', err))
         } else if (txType === TxType.LANDLORD_PAYOUT) {
           await enqueueDelivery(WebhookEventType.PAYOUT_DISBURSED, {
             dealId,
             amountUsdc,
             externalRef,
             amountNgn
-          }).catch(err => logger.error('Failed to enqueue payout.disbursed webhook:', err))
+          }, { requestId: req.requestId }).catch(err => logger.error('Failed to enqueue payout.disbursed webhook:', err))
         }
 
         res.status(sent ? 200 : 202).json({

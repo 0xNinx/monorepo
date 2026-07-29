@@ -24,6 +24,28 @@ const migrationPaths = [
   path.resolve(__dirname, '../../migrations/030_two_tier_pricing.sql'),
 ]
 
+const softDeleteTables = [
+  'users',
+  'sessions',
+  'wallets',
+  'linked_addresses',
+  'landlord_profiles',
+  'tenant_applications',
+  'whistleblower_listings',
+  'tenant_deals',
+  'landlord_properties',
+  'ngn_deposits',
+  'conversions',
+  'webhook_events',
+  'webhook_replay_attempts',
+  'otp_challenges',
+  'wallet_challenges',
+  'kyc_documents',
+  'tenant_documents',
+  'property_photos',
+  'support_messages',
+]
+
 function loadMigrations(sql: string) {
   const db = newDb({ autoCreateForeignKeyIndices: true })
 
@@ -100,6 +122,13 @@ describe('Postgres-backed stores', () => {
 
     const sql = migrationPaths.map((p) => readFileSync(p, 'utf8')).join('\n')
     const db = loadMigrations(sql)
+    for (const table of softDeleteTables) {
+      try {
+        db.public.none(`ALTER TABLE ${table} ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ DEFAULT NULL`)
+      } catch {
+        // Some tables are not present in this focused persistence fixture.
+      }
+    }
     const { Pool } = db.adapters.createPg()
     pool = new Pool()
     setPool(pool)

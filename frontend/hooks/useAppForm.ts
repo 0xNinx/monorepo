@@ -50,7 +50,9 @@ export function useAppForm<T extends FieldValues>({
   const form = useForm<T>({
     resolver: zodResolver(schema),
     defaultValues: mergedDefaults,
-    mode: "onChange",
+    mode: "onBlur",
+    reValidateMode: "onBlur",
+    shouldFocusError: true,
     ...rest,
   });
 

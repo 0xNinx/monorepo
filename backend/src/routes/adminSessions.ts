@@ -67,9 +67,10 @@ async function listActiveSessions(userId: string): Promise<SessionRow[]> {
             ip_hash, user_agent, device_fingerprint, revoked_at, forced_logout_at
      FROM sessions
      WHERE user_id = $1
-       AND revoked_at IS NULL
+       AND revoked_at IS NULL AND deleted_at IS NULL
        AND forced_logout_at IS NULL
        AND expires_at > NOW()
+        AND deleted_at IS NULL
      ORDER BY last_active_at DESC`,
     [userId],
   )
@@ -97,16 +98,18 @@ async function enforceSessionLimit(userId: string): Promise<number> {
      WHERE id IN (
        SELECT id FROM sessions
        WHERE user_id = $1
-         AND revoked_at IS NULL
+         AND revoked_at IS NULL AND deleted_at IS NULL
          AND forced_logout_at IS NULL
          AND expires_at > NOW()
+        AND deleted_at IS NULL
        ORDER BY last_active_at ASC
        LIMIT GREATEST(0, (
          SELECT COUNT(*) FROM sessions
          WHERE user_id = $1
-           AND revoked_at IS NULL
+           AND revoked_at IS NULL AND deleted_at IS NULL
            AND forced_logout_at IS NULL
            AND expires_at > NOW()
+        AND deleted_at IS NULL
        ) - $2 + 1)
      )`,
     [userId, MAX_CONCURRENT_SESSIONS],
@@ -120,7 +123,7 @@ async function forcedLogoutAll(userId: string): Promise<number> {
   const { rowCount } = await pool.query(
     `UPDATE sessions SET forced_logout_at = NOW()
      WHERE user_id = $1
-       AND revoked_at IS NULL
+       AND revoked_at IS NULL AND deleted_at IS NULL
        AND forced_logout_at IS NULL`,
     [userId],
   )
@@ -132,7 +135,7 @@ async function revokeSession(sessionId: string): Promise<boolean> {
   if (!pool) return false
   const { rowCount } = await pool.query(
     `UPDATE sessions SET revoked_at = NOW()
-     WHERE id = $1 AND revoked_at IS NULL`,
+     WHERE id = $1 AND revoked_at IS NULL AND deleted_at IS NULL`,
     [sessionId],
   )
   return (rowCount ?? 0) > 0
@@ -142,7 +145,7 @@ async function touchSession(tokenHash: string): Promise<void> {
   const pool = await getPool()
   if (!pool) return
   await pool.query(
-    `UPDATE sessions SET last_active_at = NOW() WHERE token_hash = $1`,
+    `UPDATE sessions SET last_active_at = NOW() WHERE token_hash = $1 AND deleted_at IS NULL`,
     [tokenHash],
   )
 }
