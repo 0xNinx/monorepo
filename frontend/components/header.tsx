@@ -5,7 +5,6 @@ import { usePathname, useRouter } from "next/navigation"
 import { useState, useRef, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Home, ChevronDown, LogOut, LayoutDashboard, User, Search } from "lucide-react"
-import BackendHealthCompact from "@/components/BackendHealthCompact"
 import { GlobalSearch } from "@/components/GlobalSearch"
 import { MobileMenu } from "@/components/ui/mobile-menu"
 import { ThemeToggle } from "@/components/theme-toggle"
@@ -213,9 +212,6 @@ export function Header() {
             <ThemeToggle />
             <NotificationBell />
             <ConnectWalletButton />
-            <div className="hidden xl:block">
-              <BackendHealthCompact />
-            </div>
             {!hydrated ? (
               <div className="flex items-center gap-3 min-h-[44px]">
                 <div className="w-20 h-[44px] bg-foreground/5 rounded animate-pulse" />
