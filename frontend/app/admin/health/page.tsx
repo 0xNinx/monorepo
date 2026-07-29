@@ -282,13 +282,14 @@ export default function AdminHealthPage() {
         <div className="flex items-center gap-2">
           <BackendHealthCompact />
           <Button
-          variant="outline"
-          size="sm"
-          onClick={() => { void loadSnapshot(); void loadAlerts(); }}
-        >
-          <RefreshCw className="h-4 w-4 mr-1" />
-          Refresh
-        </Button>
+            variant="outline"
+            size="sm"
+            onClick={() => { void loadSnapshot(); void loadAlerts(); }}
+          >
+            <RefreshCw className="h-4 w-4 mr-1" />
+            Refresh
+          </Button>
+        </div>
       </div>
 
       {/* Service uptime panels */}
