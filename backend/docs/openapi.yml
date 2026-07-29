@@ -911,8 +911,10 @@ paths:
       operationId: approveNgnWithdrawal
       tags:
         - Admin
+      # requirePermission('payouts', 'trigger') in code — admin-tier RBAC permission,
+      # not just an authenticated session. See bearerAdminAuth description.
       security:
-        - bearerAuth: []
+        - bearerAdminAuth: []
       parameters:
         - name: id
           in: path
@@ -926,6 +928,14 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/WithdrawalResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Caller is authenticated but lacks the payouts:trigger permission
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '409':
           $ref: '#/components/responses/Error'
         default:
@@ -938,8 +948,10 @@ paths:
       operationId: rejectNgnWithdrawal
       tags:
         - Admin
+      # requirePermission('payouts', 'trigger') in code — admin-tier RBAC permission,
+      # not just an authenticated session. See bearerAdminAuth description.
       security:
-        - bearerAuth: []
+        - bearerAdminAuth: []
       parameters:
         - name: id
           in: path
@@ -964,6 +976,14 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/WithdrawalResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Caller is authenticated but lacks the payouts:trigger permission
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '409':
           $ref: '#/components/responses/Error'
         default:
@@ -3662,6 +3682,19 @@ components:
       type: http
       scheme: bearer
       bearerFormat: token
+      description: >-
+        Ordinary authenticated-session bearer token (authenticateToken middleware only —
+        no elevated role/permission required).
+    bearerAdminAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: token
+      description: >-
+        Same bearer token as bearerAuth, but the route additionally requires the caller's
+        session to carry an admin-tier RBAC permission (requirePermission(resource, action)
+        in middleware/rbac.ts, e.g. payouts:trigger) or an explicit admin/super_admin role
+        check. Kept as a distinct scheme name so admin-gated operations are visibly
+        distinguishable from ordinary authenticated ones in this document.
     webhookSignature:
       type: apiKey
       in: header
