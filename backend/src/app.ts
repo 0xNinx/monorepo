@@ -163,6 +163,7 @@ import { createTenantRatingCardRouter } from "./routes/tenantRatingCard.js";
 import { createRentGuaranteeProviderFromEnv } from "./services/insurance/rentGuaranteeProviderFactory.js";
 import { createAdminCreditScoreRouter, createCreditScoreRouter } from "./routes/creditScore.js";
 import { createSorobanContractsRouter } from "./routes/sorobanContracts.js";
+import { createContractEventsRouter } from "./routes/contractEvents.js";
 
 import { initFraudStore, PostgresFraudStore } from "./fraud/index.js";
 import { createAdminFraudRouter } from "./routes/adminFraud.js";
@@ -715,6 +716,7 @@ export function createApp() {
     app.use('/api/admin/secrets', createSecretRotationRouter())
     app.use('/api/admin/jobs', createAdminJobsRouter())
     app.use('/api/admin/webhook-replay', createWebhookReplayRouter())
+    app.use('/api', createContractEventsRouter())
     app.use('/api/deals', createDealsRouter())
     app.use('/api/whistleblower', createWhistleblowerRouter(earningsService))
     app.use('/api/webhooks', createWebhooksRouter(ngnWalletService))
@@ -768,6 +770,7 @@ export function createApp() {
     app.use("/api/admin", createAdminTenantCreditScoreRouter());
     app.use("/api/admin/credit-score", createAdminCreditScoreRouter());
     app.use("/api/admin", createSettlementAdminRouter());
+    app.use("/api", createContractEventsRouter());
     app.use("/api/config/feature-flags", createFeatureFlagsRouter());
     app.use(
       "/api/staking",
