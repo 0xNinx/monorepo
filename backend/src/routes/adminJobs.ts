@@ -7,6 +7,7 @@ import { env } from '../schemas/env.js'
 import { getJobStore } from '../jobs/scheduler/store.js'
 import { getScheduler } from '../jobs/scheduler/worker.js'
 import { JobStatus } from '../jobs/scheduler/types.js'
+import { getJobHealthReport } from '../jobs/jobObservability.js'
 
 const listJobsQuerySchema = z.object({
   status: z.nativeEnum(JobStatus).optional(),
@@ -56,6 +57,22 @@ export function createAdminJobsRouter() {
       }
     },
   )
+
+  /**
+   * GET /api/admin/jobs/health
+   * Scheduled-job and worker health: per job, what it does, when it last ran,
+   * how long it took, how many records it processed, and whether it is overdue.
+   *
+   * Registered before `/:id` so the literal path wins over the parameter.
+   */
+  router.get('/health', (req: Request, res: Response, next: NextFunction) => {
+    try {
+      requireAdmin(req)
+      res.json(getJobHealthReport())
+    } catch (err) {
+      next(err)
+    }
+  })
 
   /**
    * GET /api/admin/jobs/:id

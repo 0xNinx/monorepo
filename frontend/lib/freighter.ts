@@ -21,6 +21,20 @@ export async function connectWallet(): Promise<string> {
   return address
 }
 
+/**
+ * Whether the site already has the user's permission to talk to Freighter.
+ * Combined with an empty address this is what tells a *locked* wallet apart from
+ * one that has simply never been connected — the two need different instructions.
+ */
+export async function isWalletAllowed(): Promise<boolean> {
+  try {
+    const result = await (freighterApi as unknown as { isAllowed?: () => Promise<{ isAllowed?: boolean }> }).isAllowed?.()
+    return result?.isAllowed === true
+  } catch {
+    return false
+  }
+}
+
 /** Returns current address without triggering a connection popup. Returns null when locked/unavailable. */
 export async function getActiveAddress(): Promise<string | null> {
   try {
