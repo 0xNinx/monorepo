@@ -26,6 +26,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import BackendHealthCompact from "@/components/BackendHealthCompact";
+import JobHealthPanel from "@/components/admin/JobHealthPanel";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -317,6 +318,9 @@ export default function AdminHealthPage() {
           </div>
         )}
       </section>
+
+      {/* Background job health — surfaces jobs that have stopped running at all */}
+      <JobHealthPanel />
 
       {/* Queue depth + error rate */}
       {snapshot.type === "ok" && (

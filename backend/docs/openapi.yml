@@ -299,6 +299,96 @@ paths:
         default:
           $ref: "#/components/responses/Error"
 
+  /api/admin/jobs/health:
+    get:
+      summary: Scheduled job and worker health
+      description: >-
+        Health of every scheduled job and background worker: what it does, when
+        it last ran, how long that run took, how many records it processed, and
+        whether it is overdue. A job that has stopped being scheduled reports
+        state "overdue" (or "never_ran") so a missing run is detectable as an
+        absence rather than only as an error. Requires the x-admin-secret header
+        when MANUAL_ADMIN_SECRET is configured.
+      operationId: getJobHealth
+      tags:
+        - Admin
+      security:
+        - adminSecret: []
+      responses:
+        "200":
+          description: Job health report
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [capturedAt, overdueCount, failingCount, jobs]
+                properties:
+                  capturedAt:
+                    type: string
+                    format: date-time
+                  overdueCount:
+                    type: integer
+                  failingCount:
+                    type: integer
+                  jobs:
+                    type: array
+                    items:
+                      type: object
+                      required: [name, module, does, expectedIntervalMs, state, overdue]
+                      properties:
+                        name:
+                          type: string
+                        module:
+                          type: string
+                        does:
+                          type: string
+                        expectedIntervalMs:
+                          type: integer
+                        ifItDoesNotRun:
+                          type: string
+                        healthy:
+                          type: string
+                        state:
+                          type: string
+                          enum: [healthy, failing, overdue, never_ran]
+                        overdue:
+                          type: boolean
+                        secondsSinceLastRun:
+                          type: integer
+                          nullable: true
+                        lastSuccessAt:
+                          type: string
+                          format: date-time
+                          nullable: true
+                        consecutiveFailures:
+                          type: integer
+                        lastRun:
+                          type: object
+                          nullable: true
+                          properties:
+                            startedAt:
+                              type: string
+                              format: date-time
+                            finishedAt:
+                              type: string
+                              format: date-time
+                            durationMs:
+                              type: integer
+                            outcome:
+                              type: string
+                              enum: [completed, failed, skipped_overrun]
+                            recordsProcessed:
+                              type: integer
+                            correlationId:
+                              type: string
+                              nullable: true
+                            error:
+                              type: string
+        "403":
+          description: Invalid admin secret
+        default:
+          $ref: "#/components/responses/Error"
+
   /api/admin/receipts:
     get:
       summary: Query indexed receipts
@@ -3695,6 +3785,13 @@ components:
         in middleware/rbac.ts, e.g. payouts:trigger) or an explicit admin/super_admin role
         check. Kept as a distinct scheme name so admin-gated operations are visibly
         distinguishable from ordinary authenticated ones in this document.
+    adminSecret:
+      type: apiKey
+      in: header
+      name: x-admin-secret
+      description: >-
+        Shared operator secret checked against MANUAL_ADMIN_SECRET. Used by the
+        job-scheduler admin routes, which are reachable without a user session.
     webhookSignature:
       type: apiKey
       in: header
