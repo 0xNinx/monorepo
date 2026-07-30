@@ -25,6 +25,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import BackendHealthCompact from "@/components/BackendHealthCompact";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -278,14 +279,17 @@ export default function AdminHealthPage() {
             )}
           </p>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => { void loadSnapshot(); void loadAlerts(); }}
-        >
-          <RefreshCw className="h-4 w-4 mr-1" />
-          Refresh
-        </Button>
+        <div className="flex items-center gap-2">
+          <BackendHealthCompact />
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => { void loadSnapshot(); void loadAlerts(); }}
+          >
+            <RefreshCw className="h-4 w-4 mr-1" />
+            Refresh
+          </Button>
+        </div>
       </div>
 
       {/* Service uptime panels */}

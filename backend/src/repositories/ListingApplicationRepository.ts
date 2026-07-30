@@ -40,7 +40,10 @@ class PostgresListingApplicationRepository implements IListingApplicationReposit
   async create(
     input: CreateListingApplicationInput,
   ): Promise<ListingApplication> {
-    const pool = getPool();
+    const pool = await getPool();
+    if (!pool) {
+      throw new Error("Database pool is not available (DATABASE_URL/pg not configured)");
+    }
     const id = randomUUID();
     const now = new Date();
 
@@ -71,7 +74,10 @@ class PostgresListingApplicationRepository implements IListingApplicationReposit
   }
 
   async findById(id: string): Promise<ListingApplication | null> {
-    const pool = getPool();
+    const pool = await getPool();
+    if (!pool) {
+      throw new Error("Database pool is not available (DATABASE_URL/pg not configured)");
+    }
 
     const query = `
       SELECT id, listing_id, tenant_id, landlord_id, status, cover_note, preferred_start_date,
@@ -88,7 +94,10 @@ class PostgresListingApplicationRepository implements IListingApplicationReposit
     tenantId: string,
     filters?: { status?: ListingApplicationStatus },
   ): Promise<ListingApplication[]> {
-    const pool = getPool();
+    const pool = await getPool();
+    if (!pool) {
+      throw new Error("Database pool is not available (DATABASE_URL/pg not configured)");
+    }
 
     let query = `
       SELECT id, listing_id, tenant_id, landlord_id, status, cover_note, preferred_start_date,
@@ -114,7 +123,10 @@ class PostgresListingApplicationRepository implements IListingApplicationReposit
     listingId: string,
     filters?: { status?: ListingApplicationStatus },
   ): Promise<ListingApplication[]> {
-    const pool = getPool();
+    const pool = await getPool();
+    if (!pool) {
+      throw new Error("Database pool is not available (DATABASE_URL/pg not configured)");
+    }
 
     let query = `
       SELECT id, listing_id, tenant_id, landlord_id, status, cover_note, preferred_start_date,
@@ -140,7 +152,10 @@ class PostgresListingApplicationRepository implements IListingApplicationReposit
     tenantId: string,
     listingId: string,
   ): Promise<ListingApplication | null> {
-    const pool = getPool();
+    const pool = await getPool();
+    if (!pool) {
+      throw new Error("Database pool is not available (DATABASE_URL/pg not configured)");
+    }
 
     const query = `
       SELECT id, listing_id, tenant_id, landlord_id, status, cover_note, preferred_start_date,
@@ -165,7 +180,10 @@ class PostgresListingApplicationRepository implements IListingApplicationReposit
     reviewedBy?: string,
     reviewerNotes?: string,
   ): Promise<ListingApplication | null> {
-    const pool = getPool();
+    const pool = await getPool();
+    if (!pool) {
+      throw new Error("Database pool is not available (DATABASE_URL/pg not configured)");
+    }
     const now = new Date();
 
     const query = `
