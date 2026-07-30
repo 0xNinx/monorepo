@@ -21,14 +21,6 @@ const navLinks = [
   { href: "/about", label: "About" },
 ]
 
-const DASHBOARD_ROUTES: Record<string, string> = {
-  admin: "/dashboard/admin",
-  agent: "/dashboard/agent",
-  landlord: "/dashboard/landlord",
-  inspector: "/dashboard/inspector",
-  tenant: "/dashboard/tenant",
-}
-
 function getDashboardLink(user: { name?: string; email?: string } | null): string {
   return "/dashboard/user"
 }

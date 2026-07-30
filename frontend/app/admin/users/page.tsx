@@ -33,7 +33,7 @@ import {
   Unlock,
 } from "lucide-react";
 
-type UserRole = "admin" | "landlord" | "tenant" | "agent";
+type UserRole = "admin" | "landlord" | "tenant";
 type UserStatus = "active" | "suspended" | "pending";
 
 interface User {
@@ -80,15 +80,6 @@ const mockUsers: User[] = [
     lastActive: "2024-04-27",
   },
   {
-    id: "u3",
-    name: "Carol White",
-    email: "carol@example.com",
-    role: "agent",
-    status: "active",
-    joinedDate: "2024-02-10",
-    lastActive: "2024-04-28",
-  },
-  {
     id: "u4",
     name: "David Brown",
     email: "david@example.com",
@@ -111,7 +102,6 @@ const mockUsers: User[] = [
 const ROLES: { value: UserRole; label: string }[] = [
   { value: "tenant", label: "Tenant" },
   { value: "landlord", label: "Landlord" },
-  { value: "agent", label: "Agent" },
   { value: "admin", label: "Admin" },
 ];
 
