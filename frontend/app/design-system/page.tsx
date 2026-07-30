@@ -27,7 +27,7 @@ import { ThemeToggle } from "@/components/theme-toggle"
 const isDevelopment = process.env.NODE_ENV === "development"
 
 export const metadata: Metadata = {
-  title: "Design System — Shelterflex",
+  title: "Design System",
   robots: { index: false, follow: false },
 }
 

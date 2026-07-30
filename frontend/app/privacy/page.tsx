@@ -13,7 +13,7 @@ export const dynamic = "force-static";
  * cannot deliver a user to the placeholder version.
  */
 export const metadata: Metadata = {
-  title: "Privacy Policy — Shelterflex",
+  title: "Privacy Policy",
   description:
     "Learn how Shelterflex collects, uses, and protects your personal data. Official legal copy will be updated before launch.",
   alternates: { canonical: "/privacy-policy" },
