@@ -234,7 +234,7 @@ export default function TenantDashboard() {
         <div className="border-b-3 border-foreground bg-amber-50">
           <div className="mx-auto max-w-7xl px-4 py-3 flex items-center justify-between gap-4 flex-wrap">
             <div className="flex items-center gap-3">
-              <AlertCircle className="h-5 w-5 text-amber-600 shrink-0" />
+              <AlertCircle className="h-5 w-5 text-amber-600 shrink-0" aria-hidden="true" />
               <div>
                 <p className="text-sm font-semibold text-amber-900">
                   Complete your profile to apply for properties
@@ -411,7 +411,11 @@ export default function TenantDashboard() {
             </div>
           ) : null}
 
-          <div className="mb-6 flex flex-wrap gap-2 md:gap-4">
+          <div
+            className="mb-6 flex flex-wrap gap-2 md:gap-4"
+            role="tablist"
+            aria-label="Dashboard sections"
+          >
             {[
               { id: "overview", label: "Overview" },
               { id: "payments", label: "Payments" },
@@ -419,6 +423,8 @@ export default function TenantDashboard() {
             ].map((tab) => (
               <button
                 key={tab.id}
+                role="tab"
+                aria-selected={activeTab === tab.id}
                 onClick={() => setActiveTab(tab.id as typeof activeTab)}
                 className={`border-3 border-foreground px-3 py-2 text-sm font-bold transition-all md:px-6 md:py-3 md:text-base ${
                   activeTab === tab.id
@@ -508,7 +514,14 @@ export default function TenantDashboard() {
                           {currentLease.progress}%
                         </span>
                       </div>
-                      <div className="h-6 border-3 border-foreground bg-muted">
+                      <div
+                        className="h-6 border-3 border-foreground bg-muted"
+                        role="progressbar"
+                        aria-valuenow={currentLease.progress}
+                        aria-valuemin={0}
+                        aria-valuemax={100}
+                        aria-label={`Payment progress: ${currentLease.progress}%`}
+                      >
                         <div
                           className="h-full bg-secondary transition-all"
                           style={{ width: `${currentLease.progress}%` }}

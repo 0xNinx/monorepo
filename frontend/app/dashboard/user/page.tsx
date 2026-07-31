@@ -200,15 +200,15 @@ export default function UserDashboardPage() {
                 value="my-properties"
                 className="flex-1 md:flex-none"
               >
-                <Building2 className="h-4 w-4" />
+                <Building2 className="h-4 w-4" aria-hidden="true" />
                 My Properties
               </TabsTrigger>
               <TabsTrigger value="applications" className="flex-1 md:flex-none">
-                <CreditCard className="h-4 w-4" />
+                <CreditCard className="h-4 w-4" aria-hidden="true" />
                 Applications
               </TabsTrigger>
               <TabsTrigger value="wallet" className="flex-1 md:flex-none">
-                <Wallet className="h-4 w-4" />
+                <Wallet className="h-4 w-4" aria-hidden="true" />
                 Wallet
               </TabsTrigger>
             </TabsList>
@@ -377,6 +377,9 @@ export default function UserDashboardPage() {
                         <CardTitle>Transaction history</CardTitle>
                       </CardHeader>
                       <CardContent>
+                        <div aria-live="polite" aria-atomic="true" className="sr-only">
+                          {`Loaded ${ledgerEntries.length} transaction${ledgerEntries.length !== 1 ? "s" : ""}.`}
+                        </div>
                         <WalletLedgerTable entries={ledgerEntries} />
                       </CardContent>
                     </Card>
