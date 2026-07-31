@@ -48,7 +48,6 @@ function VerifyOtpForm() {
         const roleRoutes: Record<string, string> = {
           tenant: "/dashboard/tenant",
           landlord: "/dashboard/landlord",
-          agent: "/dashboard/agent",
         };
         router.push(roleRoutes[res.user.role] ?? "/dashboard/tenant");
       }
