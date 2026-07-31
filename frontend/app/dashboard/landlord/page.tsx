@@ -219,8 +219,14 @@ export default function LandlordDashboard() {
             )}
           </div>
 
-          <div className="mb-6 flex flex-wrap gap-2 md:gap-4">
+          <div
+            className="mb-6 flex flex-wrap gap-2 md:gap-4"
+            role="tablist"
+            aria-label="Dashboard sections"
+          >
             <button
+              role="tab"
+              aria-selected={activeTab === "properties"}
               onClick={() => setActiveTab("properties")}
               className={`border-3 border-foreground px-3 py-2 text-sm font-bold transition-all md:px-6 md:py-3 md:text-base ${
                 activeTab === "properties"
@@ -309,9 +315,10 @@ export default function LandlordDashboard() {
                           {pendingCount > 0 && property.listingId && (
                             <Link
                               href={`/dashboard/landlord/properties/${property.listingId}/applications`}
+                              aria-label={`${pendingCount} pending application${pendingCount !== 1 ? "s" : ""} for ${property.title}`}
                               className="absolute right-3 top-3 flex h-8 w-8 items-center justify-center border-2 border-foreground bg-destructive text-xs font-bold text-destructive-foreground shadow-[2px_2px_0px_0px_rgba(26,26,26,1)] transition-all hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-[1px_1px_0px_0px_rgba(26,26,26,1)]"
                             >
-                              {pendingCount}
+                              <span aria-hidden="true">{pendingCount}</span>
                             </Link>
                           )}
                         </div>
@@ -333,8 +340,9 @@ export default function LandlordDashboard() {
                                   variant="outline"
                                   size="icon"
                                   className="border-3 border-foreground bg-transparent"
+                                  aria-label={`Options for ${property.title}`}
                                 >
-                                  <MoreVertical className="h-4 w-4" />
+                                  <MoreVertical className="h-4 w-4" aria-hidden="true" />
                                 </Button>
                               </DropdownMenuTrigger>
                               <DropdownMenuContent className="border-3 border-foreground">
@@ -365,17 +373,17 @@ export default function LandlordDashboard() {
 
                           <div className="mb-4 flex gap-6">
                             <span className="flex items-center gap-1 text-sm font-medium">
-                              <Bed className="h-4 w-4" /> {property.bedrooms}{" "}
-                              Beds
+                              <Bed className="h-4 w-4" aria-hidden="true" />
+                              {property.bedrooms} Beds
                             </span>
                             <span className="flex items-center gap-1 text-sm font-medium">
-                              <Bath className="h-4 w-4" /> {property.bathrooms}{" "}
-                              Baths
+                              <Bath className="h-4 w-4" aria-hidden="true" />
+                              {property.bathrooms} Baths
                             </span>
                             {property.sqm && (
                               <span className="flex items-center gap-1 text-sm font-medium">
-                                <Square className="h-4 w-4" /> {property.sqm}{" "}
-                                sqm
+                                <Square className="h-4 w-4" aria-hidden="true" />
+                                {property.sqm} sqm
                               </span>
                             )}
                           </div>

@@ -148,7 +148,7 @@ export function HistoryTable({ walletAddress }: HistoryTableProps) {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <Table>
+            <Table aria-label="Staking transaction history">
               <TableHeader className="bg-muted/40">
                 <TableRow>
                   <TableHead className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Date & Time</TableHead>
