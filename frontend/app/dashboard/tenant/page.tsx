@@ -234,7 +234,7 @@ export default function TenantDashboard() {
         <div className="border-b-3 border-foreground bg-amber-50">
           <div className="mx-auto max-w-7xl px-4 py-3 flex items-center justify-between gap-4 flex-wrap">
             <div className="flex items-center gap-3">
-              <AlertCircle className="h-5 w-5 text-amber-600 shrink-0" />
+              <AlertCircle className="h-5 w-5 text-amber-600 shrink-0" aria-hidden="true" />
               <div>
                 <p className="text-sm font-semibold text-amber-900">
                   Complete your profile to apply for properties
@@ -289,16 +289,12 @@ export default function TenantDashboard() {
               Welcome back, Ngozi!
             </h1>
             {leaseLoading ? (
-              <LoadingState
-                label="Loading your lease summary"
-                className="mt-2 flex h-6 items-center md:h-7 lg:h-8"
-              >
-                <Skeleton className="h-4 w-72 max-w-full" />
-              </LoadingState>
-            ) : leaseError ? (
-              <p className="mt-2 text-sm text-muted-foreground md:text-base lg:text-lg">
-                We couldn&apos;t load your lease just now.
-              </p>
+              <div className="mt-2 flex items-center gap-2" role="status">
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                <span className="text-sm text-muted-foreground">
+                  Loading lease info...
+                </span>
+              </div>
             ) : currentLease ? (
               <p className="mt-2 text-sm text-muted-foreground md:text-base lg:text-lg">
                 Your next payment of{" "}
@@ -411,7 +407,11 @@ export default function TenantDashboard() {
             </div>
           ) : null}
 
-          <div className="mb-6 flex flex-wrap gap-2 md:gap-4">
+          <div
+            className="mb-6 flex flex-wrap gap-2 md:gap-4"
+            role="tablist"
+            aria-label="Dashboard sections"
+          >
             {[
               { id: "overview", label: "Overview" },
               { id: "payments", label: "Payments" },
@@ -419,6 +419,8 @@ export default function TenantDashboard() {
             ].map((tab) => (
               <button
                 key={tab.id}
+                role="tab"
+                aria-selected={activeTab === tab.id}
                 onClick={() => setActiveTab(tab.id as typeof activeTab)}
                 className={`border-3 border-foreground px-3 py-2 text-sm font-bold transition-all md:px-6 md:py-3 md:text-base ${
                   activeTab === tab.id
@@ -508,7 +510,14 @@ export default function TenantDashboard() {
                           {currentLease.progress}%
                         </span>
                       </div>
-                      <div className="h-6 border-3 border-foreground bg-muted">
+                      <div
+                        className="h-6 border-3 border-foreground bg-muted"
+                        role="progressbar"
+                        aria-valuenow={currentLease.progress}
+                        aria-valuemin={0}
+                        aria-valuemax={100}
+                        aria-label={`Payment progress: ${currentLease.progress}%`}
+                      >
                         <div
                           className="h-full bg-secondary transition-all"
                           style={{ width: `${currentLease.progress}%` }}

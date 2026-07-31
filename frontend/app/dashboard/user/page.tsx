@@ -200,15 +200,15 @@ export default function UserDashboardPage() {
                 value="my-properties"
                 className="flex-1 md:flex-none"
               >
-                <Building2 className="h-4 w-4" />
+                <Building2 className="h-4 w-4" aria-hidden="true" />
                 My Properties
               </TabsTrigger>
               <TabsTrigger value="applications" className="flex-1 md:flex-none">
-                <CreditCard className="h-4 w-4" />
+                <CreditCard className="h-4 w-4" aria-hidden="true" />
                 Applications
               </TabsTrigger>
               <TabsTrigger value="wallet" className="flex-1 md:flex-none">
-                <Wallet className="h-4 w-4" />
+                <Wallet className="h-4 w-4" aria-hidden="true" />
                 Wallet
               </TabsTrigger>
             </TabsList>
@@ -285,10 +285,18 @@ export default function UserDashboardPage() {
                     <StatCardSkeleton className="h-28" />
                     <StatCardSkeleton className="h-28" />
                   </div>
-                  <div className="space-y-3">
-                    {Array.from({ length: 4 }).map((_, i) => (
-                      <ListRowSkeleton key={i} />
-                    ))}
+                  <Skeleton className="h-64 w-full" />
+                </div>
+              ) : walletError ? (
+                <Card className="border-3 border-foreground bg-destructive/10 p-6">
+                  <div className="flex items-start gap-3">
+                    <AlertTriangle className="h-5 w-5 shrink-0 text-destructive" aria-hidden="true" />
+                    <div>
+                      <p className="font-bold">Failed to load wallet</p>
+                      <p className="text-sm text-muted-foreground">
+                        {walletError}
+                      </p>
+                    </div>
                   </div>
                 </LoadingState>
               ) : walletError ? (
@@ -365,18 +373,27 @@ export default function UserDashboardPage() {
                   </div>
 
                   {ledgerEntries.length === 0 ? (
-                    <EmptyState
-                      icon={Wallet}
-                      title="No transactions yet"
-                      description="Top up your wallet to cover rent instalments — every movement shows up in this ledger."
-                      action={{ label: "Go to wallet", href: "/wallet" }}
-                    />
+                    <Empty className="border-2 border-foreground/20 bg-card">
+                      <EmptyHeader>
+                        <EmptyMedia variant="icon">
+                          <Wallet aria-hidden="true" />
+                        </EmptyMedia>
+                        <EmptyTitle>No transactions yet</EmptyTitle>
+                        <EmptyDescription>
+                          Your wallet ledger entries will appear here.
+                        </EmptyDescription>
+                      </EmptyHeader>
+                      <EmptyContent />
+                    </Empty>
                   ) : (
                     <Card className="border-2 border-foreground/20">
                       <CardHeader>
                         <CardTitle>Transaction history</CardTitle>
                       </CardHeader>
                       <CardContent>
+                        <div aria-live="polite" aria-atomic="true" className="sr-only">
+                          {`Loaded ${ledgerEntries.length} transaction${ledgerEntries.length !== 1 ? "s" : ""}.`}
+                        </div>
                         <WalletLedgerTable entries={ledgerEntries} />
                       </CardContent>
                     </Card>
