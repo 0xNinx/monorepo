@@ -25,6 +25,12 @@ import {
   ArrowDown,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  EmptyState,
+  ErrorState,
+  ListRowSkeleton,
+  LoadingState,
+} from "@/components/ui/data-state";
 import { Input } from "@/components/ui/input";
 import {
   DropdownMenu,
@@ -183,6 +189,13 @@ export default function MessagesPage() {
     };
   }, []);
 
+  // Bumped by the error state's retry so the effect below re-runs.
+  const [conversationsReloadToken, setConversationsReloadToken] = useState(0);
+  const retryConversations = useCallback(
+    () => setConversationsReloadToken((token) => token + 1),
+    [],
+  );
+
   useEffect(() => {
     if (!isAuthenticated) return;
 
@@ -206,7 +219,7 @@ export default function MessagesPage() {
     };
 
     loadConversations();
-  }, [isAuthenticated, debouncedSearch]);
+  }, [isAuthenticated, debouncedSearch, conversationsReloadToken]);
 
   const loadMoreConversations = useCallback(async () => {
     if (!hasMoreConversations || !conversationCursor || isLoadingConversations) return;
@@ -574,17 +587,18 @@ export default function MessagesPage() {
           className="h-[calc(100vh-180px)] overflow-y-auto"
         >
           {isLoadingConversations && conversations.length === 0 ? (
-            <div className="flex justify-center py-12">
-              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-            </div>
+            <LoadingState label="Loading conversations" className="space-y-3 p-4">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <ListRowSkeleton key={i} />
+              ))}
+            </LoadingState>
           ) : conversationsError ? (
-            <div className="flex flex-col items-center px-6 py-12 text-center">
-              <AlertCircle className="h-8 w-8 text-destructive mb-2" />
-              <p className="text-sm text-destructive">{conversationsError}</p>
-              <Button variant="outline" size="sm" onClick={() => window.location.reload()} className="mt-4 border-2 border-foreground">
-                <RefreshCw className="mr-1 h-3 w-3" /> Retry
-              </Button>
-            </div>
+            <ErrorState
+              className="m-4"
+              title="Couldn't load your conversations"
+              description={conversationsError}
+              onRetry={retryConversations}
+            />
           ) : showNoResults ? (
             <div className="flex flex-col items-center justify-center px-6 py-16 text-center">
               <div className="flex h-16 w-16 items-center justify-center border-3 border-foreground bg-muted">
@@ -596,15 +610,13 @@ export default function MessagesPage() {
               </p>
             </div>
           ) : showNoConversations ? (
-            <div className="flex flex-col items-center justify-center px-6 py-16 text-center">
-              <div className="flex h-16 w-16 items-center justify-center border-3 border-foreground bg-muted">
-                <MessageSquareOff className="h-8 w-8 text-muted-foreground" />
-              </div>
-              <h3 className="mt-4 font-bold">No conversations yet</h3>
-              <p className="mt-2 text-sm text-muted-foreground">
-                Start messaging a landlord or tenant
-              </p>
-            </div>
+            <EmptyState
+              className="m-4 border-0"
+              icon={MessageSquareOff}
+              title="No conversations yet"
+              description="Message a landlord from any listing and the thread will show up here."
+              action={{ label: "Browse properties", href: "/properties" }}
+            />
           ) : (
             <>
               {conversations.map((conv) => {

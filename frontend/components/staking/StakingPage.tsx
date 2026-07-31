@@ -127,7 +127,13 @@ export default function StakingPage() {
 
     if (stakingMode === "ngn_balance") {
       if (!ngnBalance || amount > ngnBalance.availableNgn) {
-        setStatus(`Insufficient NGN balance. Available: ₦${ngnBalance?.availableNgn.toLocaleString() || 0}`);
+        // Only quote a figure we actually hold; an unloaded balance says so
+        // rather than claiming the wallet has ₦0 available.
+        setStatus(
+          ngnBalance
+            ? `Insufficient NGN balance. Available: ₦${ngnBalance.availableNgn.toLocaleString()}`
+            : "We couldn't read your NGN balance. Please retry in a moment.",
+        );
         return;
       }
     }

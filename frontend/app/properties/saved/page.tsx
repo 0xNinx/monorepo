@@ -2,9 +2,13 @@
 
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
-import { Heart, ArrowLeft, Search, AlertCircle } from "lucide-react";
+import { Heart, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
+import {
+  EmptyState,
+  ErrorState,
+  LoadingState,
+} from "@/components/ui/data-state";
 import { DashboardHeader } from "@/components/dashboard-header";
 import { DashboardSidebar } from "@/components/dashboard/DashboardSidebar";
 import { PropertyCard } from "@/components/property-card";
@@ -27,6 +31,10 @@ export default function SavedPropertiesPage() {
   const [properties, setProperties] = useState<SavedProperty[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Bumping this re-runs the effect below, which keeps the existing
+  // cancel-on-unmount guard while giving the error state a real retry.
+  const [reloadToken, setReloadToken] = useState(0);
+  const retry = useCallback(() => setReloadToken((token) => token + 1), []);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -78,7 +86,7 @@ export default function SavedPropertiesPage() {
     return () => {
       cancelled = true;
     };
-  }, [isAuthenticated]);
+  }, [isAuthenticated, reloadToken]);
 
   const handleUnsave = useCallback(
     async (listingId: string) => {
@@ -137,7 +145,7 @@ export default function SavedPropertiesPage() {
                 </h1>
                 <p className="text-sm text-muted-foreground">
                   {isLoading
-                    ? "Loading..."
+                    ? "Loading your shortlist…"
                     : `${visibleProperties.length} saved ${visibleProperties.length === 1 ? "property" : "properties"}`}
                 </p>
               </div>
@@ -146,42 +154,33 @@ export default function SavedPropertiesPage() {
 
           {/* Loading state */}
           {isLoading && (
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <LoadingState
+              label="Loading saved properties"
+              className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3"
+            >
               {Array.from({ length: 6 }).map((_, i) => (
                 <PropertyCardSkeleton key={i} />
               ))}
-            </div>
+            </LoadingState>
           )}
 
           {/* Error state */}
           {!isLoading && error && (
-            <Card className="border-3 border-foreground p-8 text-center shadow-[4px_4px_0px_0px_rgba(26,26,26,1)]">
-              <AlertCircle className="mx-auto h-12 w-12 text-destructive" />
-              <p className="mt-4 text-lg font-bold">{error}</p>
-              <Button
-                onClick={() => window.location.reload()}
-                className="mt-4 border-3 border-foreground bg-primary font-bold shadow-[4px_4px_0px_0px_rgba(26,26,26,1)]"
-              >
-                Try Again
-              </Button>
-            </Card>
+            <ErrorState
+              title="Could not load your saved properties"
+              description={error}
+              onRetry={retry}
+            />
           )}
 
           {/* Empty state */}
           {!isLoading && !error && visibleProperties.length === 0 && (
-            <Card className="border-3 border-dashed border-foreground p-12 text-center shadow-none">
-              <Heart className="mx-auto h-16 w-16 text-muted-foreground" />
-              <h2 className="mt-4 text-xl font-bold">No saved properties yet</h2>
-              <p className="mt-2 text-muted-foreground">
-                Browse properties and tap the heart icon to save your favorites here.
-              </p>
-              <Link href="/properties" className="mt-6 inline-block">
-                <Button className="border-3 border-foreground bg-primary font-bold shadow-[4px_4px_0px_0px_rgba(26,26,26,1)] transition-all hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-[2px_2px_0px_0px_rgba(26,26,26,1)]">
-                  <Search className="mr-2 h-4 w-4" />
-                  Browse Properties
-                </Button>
-              </Link>
-            </Card>
+            <EmptyState
+              icon={Heart}
+              title="No saved properties yet"
+              description="Tap the heart icon on any listing to save it here, then compare your shortlist side by side."
+              action={{ label: "Browse properties", href: "/properties" }}
+            />
           )}
 
           {/* Property grid */}

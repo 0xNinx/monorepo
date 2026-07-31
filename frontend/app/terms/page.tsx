@@ -13,7 +13,7 @@ export const dynamic = "force-static";
  * engines cannot deliver a user to the placeholder version.
  */
 export const metadata: Metadata = {
-  title: "Terms of Service — Shelterflex",
+  title: "Terms of Service",
   description:
     "Read the Shelterflex Terms of Service. Official legal copy will be updated before launch.",
   alternates: { canonical: "/terms-of-service" },

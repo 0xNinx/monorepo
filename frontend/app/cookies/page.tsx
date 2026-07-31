@@ -10,7 +10,7 @@ export const dynamic = "force-static";
  * real one.
  */
 export const metadata: Metadata = {
-  title: "Cookie Policy — Shelterflex",
+  title: "Cookie Policy",
   description:
     "Understand how Shelterflex uses cookies and similar technologies. Official legal copy will be updated before launch.",
   alternates: { canonical: "/cookies" },
