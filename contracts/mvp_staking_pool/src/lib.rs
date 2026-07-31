@@ -1202,13 +1202,19 @@ mod stake_partition {
 
         // Stake 500, invariant holds
         client.stake(&user, &500i128);
-        assert_eq!(client.used_stake(&user) + client.unused_stake(&user), client.staked_balance(&user));
+        assert_eq!(
+            client.used_stake(&user) + client.unused_stake(&user),
+            client.staked_balance(&user)
+        );
 
         // Utilize 200, invariant still holds
         client.utilize_stake(&admin, &user, &200i128).unwrap();
         assert_eq!(client.used_stake(&user), 200i128);
         assert_eq!(client.unused_stake(&user), 300i128);
-        assert_eq!(client.used_stake(&user) + client.unused_stake(&user), client.staked_balance(&user));
+        assert_eq!(
+            client.used_stake(&user) + client.unused_stake(&user),
+            client.staked_balance(&user)
+        );
 
         // Fund rewards and claim — does not change stake invariant
         client.fund_rewards(&admin, &100i128);
@@ -1216,14 +1222,20 @@ mod stake_partition {
         assert!(claimable > 0);
         let claimed = client.claim(&user);
         assert_eq!(claimed, claimable);
-        assert_eq!(client.used_stake(&user) + client.unused_stake(&user), client.staked_balance(&user));
+        assert_eq!(
+            client.used_stake(&user) + client.unused_stake(&user),
+            client.staked_balance(&user)
+        );
 
         // Unstake 100 from unused portion, invariant holds
         client.unstake(&user, &100i128).unwrap();
         assert_eq!(client.unused_stake(&user), 200i128);
         assert_eq!(client.used_stake(&user), 200i128);
         assert_eq!(client.staked_balance(&user), 400i128);
-        assert_eq!(client.used_stake(&user) + client.unused_stake(&user), client.staked_balance(&user));
+        assert_eq!(
+            client.used_stake(&user) + client.unused_stake(&user),
+            client.staked_balance(&user)
+        );
     }
 
     // -------------------------------------------------------------------------
@@ -1241,7 +1253,10 @@ mod stake_partition {
         // Exact amount succeeds
         client.utilize_stake(&admin, &user, &100i128).unwrap();
         // Any further utilization should fail
-        let err = client.try_utilize_stake(&admin, &user, &1i128).unwrap_err().unwrap();
+        let err = client
+            .try_utilize_stake(&admin, &user, &1i128)
+            .unwrap_err()
+            .unwrap();
         assert_eq!(err, ContractError::UtilizationExceedsUnused);
     }
 
@@ -1256,7 +1271,10 @@ mod stake_partition {
         // Utilize 150; only 50 unused left
         client.utilize_stake(&admin, &user, &150i128).unwrap();
         // Try to utilize 100 more — should fail
-        let err = client.try_utilize_stake(&admin, &user, &100i128).unwrap_err().unwrap();
+        let err = client
+            .try_utilize_stake(&admin, &user, &100i128)
+            .unwrap_err()
+            .unwrap();
         assert_eq!(err, ContractError::UtilizationExceedsUnused);
     }
 
@@ -1301,7 +1319,10 @@ mod stake_partition {
         assert_eq!(client.claimable(&user), 0i128);
 
         // After claim, stake invariant still holds
-        assert_eq!(client.used_stake(&user) + client.unused_stake(&user), client.staked_balance(&user));
+        assert_eq!(
+            client.used_stake(&user) + client.unused_stake(&user),
+            client.staked_balance(&user)
+        );
     }
 
     #[test]
