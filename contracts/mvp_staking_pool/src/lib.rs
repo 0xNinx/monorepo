@@ -1208,7 +1208,7 @@ mod stake_partition {
         );
 
         // Utilize 200, invariant still holds
-        client.utilize_stake(&admin, &user, &200i128).unwrap();
+        client.utilize_stake(&admin, &user, &200i128);
         assert_eq!(client.used_stake(&user), 200i128);
         assert_eq!(client.unused_stake(&user), 300i128);
         assert_eq!(
@@ -1228,7 +1228,7 @@ mod stake_partition {
         );
 
         // Unstake 100 from unused portion, invariant holds
-        client.unstake(&user, &100i128).unwrap();
+        client.unstake(&user, &100i128);
         assert_eq!(client.unused_stake(&user), 200i128);
         assert_eq!(client.used_stake(&user), 200i128);
         assert_eq!(client.staked_balance(&user), 400i128);
@@ -1251,7 +1251,7 @@ mod stake_partition {
         client.stake(&user, &100i128);
 
         // Exact amount succeeds
-        client.utilize_stake(&admin, &user, &100i128).unwrap();
+        client.utilize_stake(&admin, &user, &100i128);
         // Any further utilization should fail
         let err = client
             .try_utilize_stake(&admin, &user, &1i128)
@@ -1269,7 +1269,7 @@ mod stake_partition {
         StellarAssetClient::new(&env, &token).mint(&user, &200i128);
         client.stake(&user, &200i128);
         // Utilize 150; only 50 unused left
-        client.utilize_stake(&admin, &user, &150i128).unwrap();
+        client.utilize_stake(&admin, &user, &150i128);
         // Try to utilize 100 more — should fail
         let err = client
             .try_utilize_stake(&admin, &user, &100i128)
@@ -1290,7 +1290,7 @@ mod stake_partition {
         StellarAssetClient::new(&env, &token).mint(&user, &200i128);
         client.stake(&user, &200i128);
         // Utilize 150; only 50 unused
-        client.utilize_stake(&admin, &user, &150i128).unwrap();
+        client.utilize_stake(&admin, &user, &150i128);
         // Unstake 51 — exceeds unused (50)
         let err = client.try_unstake(&user, &51i128).unwrap_err().unwrap();
         assert_eq!(err, ContractError::InsufficientUnusedStake);
@@ -1310,7 +1310,7 @@ mod stake_partition {
 
         client.stake(&user, &1_000i128);
         // Utilize half
-        client.utilize_stake(&admin, &user, &500i128).unwrap();
+        client.utilize_stake(&admin, &user, &500i128);
         // Fund 1000 tokens as rewards — user is the sole staker so gets all
         client.fund_rewards(&admin, &1_000i128);
         assert_eq!(client.claimable(&user), 1_000i128);
@@ -1335,7 +1335,7 @@ mod stake_partition {
         StellarAssetClient::new(&env, &token).mint(&admin, &500i128);
 
         client.stake(&user, &500i128);
-        client.utilize_stake(&admin, &user, &200i128).unwrap();
+        client.utilize_stake(&admin, &user, &200i128);
         client.fund_rewards(&admin, &500i128);
 
         let first = client.claim(&user);
